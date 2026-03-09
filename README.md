@@ -24,15 +24,19 @@ Built with **Next.js**, **MapLibre GL**, **FastAPI**, and **Python**, it's desig
 
 ---
 
-## ⚡ Quick Start (Docker)
+## ⚡ Quick Start (Docker or Podman)
 
 ```bash
 git clone https://github.com/BigBodyCobain/Shadowbroker.git
 cd Shadowbroker
-docker-compose up -d
+./compose.sh up -d
 ```
 
-Open `http://localhost:3000` to view the dashboard! *(Requires Docker)*
+Open `http://localhost:3000` to view the dashboard! *(Requires Docker or Podman)*
+
+`compose.sh` auto-detects `docker compose`, `docker-compose`, `podman compose`, and `podman-compose`.
+If both runtimes are installed, you can force Podman with `./compose.sh --engine podman up -d`.
+Do not append a trailing `.` to that command; Compose treats it as a service name.
 
 ---
 
@@ -161,17 +165,15 @@ Open `http://localhost:3000` to view the dashboard! *(Requires Docker)*
 
 ## 🚀 Getting Started
 
-### 🐳 Docker Setup (Recommended for Self-Hosting)
+### 🐳 Docker / Podman Setup (Recommended for Self-Hosting)
 
 The repo includes a `docker-compose.yml` that builds both images locally.
 
 ```bash
 git clone https://github.com/BigBodyCobain/Shadowbroker.git
 cd Shadowbroker
-# Add your API keys (optional — see Environment Variables below)
-cp backend/.env.example backend/.env
-# Build and start
-docker-compose up -d --build
+# Add your API keys in a repo-root .env file (optional — see Environment Variables below)
+./compose.sh up -d
 ```
 
 Open `http://localhost:3000` to view the dashboard.
@@ -181,11 +183,14 @@ Open `http://localhost:3000` to view the dashboard.
 > (e.g. `"9096:8000"`), set `NEXT_PUBLIC_API_URL` before building:
 >
 > ```bash
-> NEXT_PUBLIC_API_URL=http://192.168.1.50:9096 docker-compose up -d --build
+> NEXT_PUBLIC_API_URL=http://192.168.1.50:9096 ./compose.sh up -d --build
 > ```
 >
 > This is a **build-time** variable (Next.js limitation) — it gets baked into
 > the frontend during `npm run build`. Changing it requires a rebuild.
+
+If you prefer to call the container engine directly, Podman users can run `podman compose up -d`, or force the wrapper to use Podman with `./compose.sh --engine podman up -d`.
+Depending on your local Podman configuration, `podman compose` may still delegate to an external compose provider while talking to the Podman socket.
 
 ---
 

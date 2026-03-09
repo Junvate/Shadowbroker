@@ -25,6 +25,7 @@ try:
         add_dir(zipf, 'frontend', {'node_modules', '.next'})
         
         print("Zipping root files...")
+        zipf.write('compose.sh')
         zipf.write('docker-compose.yml')
         zipf.write('start.bat')
         zipf.write('start.sh')
