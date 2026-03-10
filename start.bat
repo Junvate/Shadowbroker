@@ -58,6 +58,9 @@ if %errorlevel% neq 0 (
     exit /b 1
 )
 echo [*] Backend dependencies OK.
+echo [*] Installing backend Node.js dependencies...
+call npm install --silent
+echo [*] Backend Node.js dependencies OK.
 cd ..
 
 echo.

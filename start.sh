@@ -52,6 +52,9 @@ if [ $? -ne 0 ]; then
 fi
 echo "[*] Backend dependencies OK."
 deactivate
+echo "[*] Installing backend Node.js dependencies..."
+npm install --silent
+echo "[*] Backend Node.js dependencies OK."
 
 cd "$SCRIPT_DIR"
 
