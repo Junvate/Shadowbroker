@@ -559,7 +559,7 @@ const MaplibreViewer = ({ data, activeLayers, onEntityClick, flyToLocation, sele
                 const [iLng, iLat] = interpFlight(f);
                 return {
                     type: 'Feature',
-                    properties: { id: f.callsign || f.icao24 || `flight-${i}`, type: 'flight', callsign: f.callsign || f.icao24, rotation: f.true_track || f.heading || 0, iconId: grounded ? GROUNDED_ICON_MAP[acType] : COLOR_MAP_COMMERCIAL[acType] },
+                    properties: { id: f.icao24 || f.callsign || `flight-${i}`, type: 'flight', callsign: f.callsign || f.icao24, rotation: f.true_track || f.heading || 0, iconId: grounded ? GROUNDED_ICON_MAP[acType] : COLOR_MAP_COMMERCIAL[acType] },
                     geometry: { type: 'Point', coordinates: [iLng, iLat] }
                 };
             }).filter(Boolean)
@@ -579,7 +579,7 @@ const MaplibreViewer = ({ data, activeLayers, onEntityClick, flyToLocation, sele
                 const [iLng, iLat] = interpFlight(f);
                 return {
                     type: 'Feature',
-                    properties: { id: f.callsign || f.icao24 || `pflight-${i}`, type: 'private_flight', callsign: f.callsign || f.icao24, rotation: f.heading || 0, iconId: grounded ? GROUNDED_ICON_MAP[acType] : COLOR_MAP_PRIVATE[acType] },
+                    properties: { id: f.icao24 || f.callsign || `pflight-${i}`, type: 'private_flight', callsign: f.callsign || f.icao24, rotation: f.heading || 0, iconId: grounded ? GROUNDED_ICON_MAP[acType] : COLOR_MAP_PRIVATE[acType] },
                     geometry: { type: 'Point', coordinates: [iLng, iLat] }
                 };
             }).filter(Boolean)
@@ -599,7 +599,7 @@ const MaplibreViewer = ({ data, activeLayers, onEntityClick, flyToLocation, sele
                 const [iLng, iLat] = interpFlight(f);
                 return {
                     type: 'Feature',
-                    properties: { id: f.callsign || f.icao24 || `pjet-${i}`, type: 'private_jet', callsign: f.callsign || f.icao24, rotation: f.heading || 0, iconId: grounded ? GROUNDED_ICON_MAP[acType] : COLOR_MAP_JETS[acType] },
+                    properties: { id: f.icao24 || f.callsign || `pjet-${i}`, type: 'private_jet', callsign: f.callsign || f.icao24, rotation: f.heading || 0, iconId: grounded ? GROUNDED_ICON_MAP[acType] : COLOR_MAP_JETS[acType] },
                     geometry: { type: 'Point', coordinates: [iLng, iLat] }
                 };
             }).filter(Boolean)
@@ -627,7 +627,7 @@ const MaplibreViewer = ({ data, activeLayers, onEntityClick, flyToLocation, sele
                 const [iLng, iLat] = interpFlight(f);
                 return {
                     type: 'Feature',
-                    properties: { id: f.callsign || f.icao24 || `mflight-${i}`, type: 'military_flight', callsign: f.callsign || f.icao24, rotation: f.heading || 0, iconId },
+                    properties: { id: f.icao24 || f.callsign || `mflight-${i}`, type: 'military_flight', callsign: f.callsign || f.icao24, rotation: f.heading || 0, iconId },
                     geometry: { type: 'Point', coordinates: [iLng, iLat] }
                 };
             }).filter(Boolean)
