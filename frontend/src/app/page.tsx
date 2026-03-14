@@ -4,8 +4,9 @@ import { API_BASE } from "@/lib/api";
 import { useEffect, useState, useRef, useCallback } from "react";
 import dynamic from 'next/dynamic';
 import { motion } from "framer-motion";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import WorldviewLeftPanel from "@/components/WorldviewLeftPanel";
-import WorldviewRightPanel from "@/components/WorldviewRightPanel";
+
 import NewsFeed from "@/components/NewsFeed";
 import MarketsPanel from "@/components/MarketsPanel";
 import FilterPanel from "@/components/FilterPanel";
@@ -123,6 +124,8 @@ export default function Dashboard() {
   // Stable reference for child components — only changes when dataVersion increments
   const data = dataRef.current;
   const [uiVisible, setUiVisible] = useState(true);
+  const [leftOpen, setLeftOpen] = useState(true);
+  const [rightOpen, setRightOpen] = useState(true);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [legendOpen, setLegendOpen] = useState(false);
   const [mapView, setMapView] = useState({ zoom: 2, latitude: 20 });
@@ -435,21 +438,54 @@ export default function Dashboard() {
             <div>VSR</div>
           </div>
 
-          {/* LEFT HUD CONTAINER */}
-          <div className="absolute left-6 top-24 bottom-6 w-80 flex flex-col gap-6 z-[200] pointer-events-none">
+          {/* LEFT HUD CONTAINER — slides off left edge when hidden */}
+          <motion.div
+            className="absolute left-6 top-24 bottom-6 w-80 flex flex-col gap-6 z-[200] pointer-events-none"
+            animate={{ x: leftOpen ? 0 : -360 }}
+            transition={{ type: 'spring', damping: 30, stiffness: 250 }}
+          >
             {/* LEFT PANEL - DATA LAYERS */}
             <ErrorBoundary name="WorldviewLeftPanel">
               <WorldviewLeftPanel data={data} activeLayers={activeLayers} setActiveLayers={setActiveLayers} onSettingsClick={() => setSettingsOpen(true)} onLegendClick={() => setLegendOpen(true)} gibsDate={gibsDate} setGibsDate={setGibsDate} gibsOpacity={gibsOpacity} setGibsOpacity={setGibsOpacity} onEntityClick={setSelectedEntity} onFlyTo={(lat, lng) => setFlyToLocation({ lat, lng, ts: Date.now() })} />
             </ErrorBoundary>
+          </motion.div>
 
-            {/* LEFT BOTTOM - DISPLAY CONFIG */}
-            <ErrorBoundary name="WorldviewRightPanel">
-              <WorldviewRightPanel effects={effects} setEffects={setEffects} setUiVisible={setUiVisible} />
-            </ErrorBoundary>
-          </div>
+          {/* LEFT SIDEBAR TOGGLE TAB */}
+          <motion.div
+            className="absolute left-0 top-1/2 -translate-y-1/2 z-[201] pointer-events-auto"
+            animate={{ x: leftOpen ? 344 : 0 }}
+            transition={{ type: 'spring', damping: 30, stiffness: 250 }}
+          >
+            <button
+              onClick={() => setLeftOpen(!leftOpen)}
+              className="flex flex-col items-center gap-1.5 py-5 px-1.5 bg-[var(--bg-primary)]/80 backdrop-blur-md border border-[var(--border-primary)] border-l-0 rounded-r-md text-[var(--text-muted)] hover:text-cyan-400 hover:border-cyan-900/50 transition-colors shadow-[2px_0_12px_rgba(0,0,0,0.4)]"
+            >
+              {leftOpen ? <ChevronLeft size={10} /> : <ChevronRight size={10} />}
+              <span className="text-[7px] font-mono tracking-[0.2em] text-[var(--text-muted)]" style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)' }}>LAYERS</span>
+            </button>
+          </motion.div>
 
-          {/* RIGHT HUD CONTAINER */}
-          <div className="absolute right-6 top-24 bottom-6 w-80 flex flex-col gap-4 z-[200] pointer-events-auto overflow-y-auto styled-scrollbar pr-2">
+          {/* RIGHT SIDEBAR TOGGLE TAB */}
+          <motion.div
+            className="absolute right-0 top-1/2 -translate-y-1/2 z-[201] pointer-events-auto"
+            animate={{ x: rightOpen ? -344 : 0 }}
+            transition={{ type: 'spring', damping: 30, stiffness: 250 }}
+          >
+            <button
+              onClick={() => setRightOpen(!rightOpen)}
+              className="flex flex-col items-center gap-1.5 py-5 px-1.5 bg-[var(--bg-primary)]/80 backdrop-blur-md border border-[var(--border-primary)] border-r-0 rounded-l-md text-[var(--text-muted)] hover:text-cyan-400 hover:border-cyan-900/50 transition-colors shadow-[-2px_0_12px_rgba(0,0,0,0.4)]"
+            >
+              {rightOpen ? <ChevronRight size={10} /> : <ChevronLeft size={10} />}
+              <span className="text-[7px] font-mono tracking-[0.2em] text-[var(--text-muted)]" style={{ writingMode: 'vertical-rl' }}>INTEL</span>
+            </button>
+          </motion.div>
+
+          {/* RIGHT HUD CONTAINER — slides off right edge when hidden */}
+          <motion.div
+            className="absolute right-6 top-24 bottom-6 w-80 flex flex-col gap-4 z-[200] pointer-events-auto overflow-y-auto styled-scrollbar pr-2"
+            animate={{ x: rightOpen ? 0 : 360 }}
+            transition={{ type: 'spring', damping: 30, stiffness: 250 }}
+          >
             <TopRightControls />
 
             {/* FIND / LOCATE */}
@@ -505,7 +541,7 @@ export default function Dashboard() {
                 <NewsFeed data={data} selectedEntity={selectedEntity} regionDossier={regionDossier} regionDossierLoading={regionDossierLoading} />
               </ErrorBoundary>
             </div>
-          </div>
+          </motion.div>
 
           {/* BOTTOM CENTER COORDINATE / LOCATION BAR — hidden when Sentinel-2 imagery overlay is open */}
           {!(selectedEntity?.type === 'region_dossier' && regionDossier?.sentinel2) && <motion.div
