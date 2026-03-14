@@ -78,7 +78,7 @@ Do not append a trailing `.` to that command; Compose treats it as a service nam
 
 ##  🔄 **How to Update**
 
-If you are coming from v0.8.0 or older, you must pull the new code and rebuild your containers to see the latest data layers and performance fixes.
+If you are coming from v0.9.5 or older, you must pull the new code and rebuild your containers to see the latest data layers and performance fixes.
 
 ### 🐧 **Linux & 🍎 macOS** (Terminal / Zsh / Bash)
 
