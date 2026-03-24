@@ -1,0 +1,27 @@
+[project]
+name = "backend"
+version = "0.9.5"
+requires-python = ">=3.10"
+dependencies = [
+    "apscheduler==3.10.3",
+    "cachetools==5.5.2",
+    "cloudscraper==1.2.71",
+    "fastapi==0.115.12",
+    "feedparser==6.0.10",
+    "httpx==0.28.1",
+    "playwright==1.50.0",
+    "playwright-stealth==1.0.6",
+    "pydantic==2.11.1",
+    "pydantic-settings==2.8.1",
+    "pystac-client==0.8.6",
+    "python-dotenv==1.0.1",
+    "requests==2.31.0",
+    "reverse-geocoder==1.5.1",
+    "sgp4==2.23",
+    "slowapi==0.1.9",
+    "uvicorn==0.34.0",
+    "yfinance==0.2.54",
+]
+
+[dependency-groups]
+test = ["pytest>=8.3.4", "pytest-asyncio==0.25.0"]
