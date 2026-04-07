@@ -1,5 +1,6 @@
 const WebSocket = require('ws');
 const readline = require('readline');
+const fs = require('fs');
 
 const args = process.argv.slice(2);
 const API_KEY = args[0] || process.env.AIS_API_KEY;
@@ -12,6 +13,40 @@ if (!API_KEY) {
 // Start with global coverage, until frontend updates it
 let currentBboxes = [[[-90, -180], [90, 180]]];
 let activeWs = null;
+let useInsecureTls = ['1', 'true', 'yes'].includes(
+    String(process.env.AIS_TLS_ALLOW_INSECURE || '').toLowerCase()
+);
+let certFallbackUsed = false;
+const autoFallbackEnabled = !['0', 'false', 'no'].includes(
+    String(process.env.AIS_TLS_AUTO_FALLBACK || 'true').toLowerCase()
+);
+const customCaFile = String(process.env.AIS_CA_CERT_FILE || '').trim();
+
+function isCertError(err) {
+    const msg = String((err && err.message) || err || '').toLowerCase();
+    return (
+        msg.includes('unable to get local issuer certificate') ||
+        msg.includes('unable to verify the first certificate') ||
+        msg.includes('self signed certificate') ||
+        msg.includes('certificate verify failed')
+    );
+}
+
+function buildWsOptions() {
+    const options = {
+        rejectUnauthorized: !useInsecureTls
+    };
+    if (customCaFile) {
+        try {
+            options.ca = fs.readFileSync(customCaFile);
+        } catch (e) {
+            console.error(
+                `AIS_CA_CERT_FILE could not be read (${customCaFile}): ${e.message}`
+            );
+        }
+    }
+    return options;
+}
 
 function sendSub(ws) {
     if (ws && ws.readyState === WebSocket.OPEN) {
@@ -46,10 +81,16 @@ rl.on('line', (line) => {
 });
 
 function connect() {
-    const ws = new WebSocket('wss://stream.aisstream.io/v0/stream');
+    const ws = new WebSocket('wss://stream.aisstream.io/v0/stream', buildWsOptions());
     activeWs = ws;
 
     ws.on('open', () => {
+        if (useInsecureTls) {
+            console.error(
+                'AIS proxy connected with TLS verification disabled. ' +
+                'Set AIS_TLS_ALLOW_INSECURE=false and provide AIS_CA_CERT_FILE to re-enable strict TLS.'
+            );
+        }
         sendSub(ws);
     });
 
@@ -62,6 +103,17 @@ function connect() {
 
     ws.on('error', (err) => {
         console.error("WebSocket Proxy Error:", err.message);
+        if (isCertError(err) && autoFallbackEnabled && !useInsecureTls && !certFallbackUsed) {
+            certFallbackUsed = true;
+            useInsecureTls = true;
+            console.error(
+                "AIS TLS cert verification failed; retrying with insecure TLS fallback. " +
+                "This is for local recovery only."
+            );
+            try {
+                ws.terminate();
+            } catch (e) {}
+        }
     });
 
     ws.on('close', () => {
