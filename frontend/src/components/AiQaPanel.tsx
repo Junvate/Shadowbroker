@@ -77,6 +77,10 @@ function makeAssistantMessage(content: string, agentId?: string): AiQaChatMessag
   };
 }
 
+function modeLabel(mode: 'mock' | 'http'): string {
+  return mode === 'http' ? '在线接口' : '模拟模式';
+}
+
 export default function AiQaPanel({ config, context }: AiQaPanelProps) {
   const resolvedConfig = useMemo(
     () => resolveAiQaConfig(config),
@@ -215,7 +219,7 @@ export default function AiQaPanel({ config, context }: AiQaPanelProps) {
       const pendingReply: AiQaChatMessage = {
         id: createId(),
         role: 'assistant',
-        content: '正在分析...',
+        content: '正在分析中...',
         createdAt: Date.now(),
         agentId: selectedAgent.id,
       };
@@ -257,7 +261,7 @@ export default function AiQaPanel({ config, context }: AiQaPanelProps) {
           }),
         );
       } catch (error) {
-        const message = error instanceof Error ? error.message : 'AI 请求失败';
+        const message = error instanceof Error ? error.message : 'AI 请求失败，请稍后重试';
         setRequestError(message);
         setMessages((prev) =>
           prev.map((msg) => {
@@ -321,7 +325,7 @@ export default function AiQaPanel({ config, context }: AiQaPanelProps) {
                 : 'text-amber-300 border-amber-500/40 bg-amber-500/10'
             }`}
           >
-            {resolvedConfig.transport.mode.toUpperCase()}
+            {modeLabel(resolvedConfig.transport.mode)}
           </span>
           {isMinimized ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
         </div>
@@ -389,11 +393,11 @@ export default function AiQaPanel({ config, context }: AiQaPanelProps) {
                     <div className="border border-[var(--border-primary)]/50 bg-[var(--bg-secondary)]/20 p-2.5 space-y-2.5">
                       <div className="flex items-center gap-2 text-[9px] font-mono text-cyan-400 tracking-widest">
                         <SlidersHorizontal size={11} />
-                        RUNTIME PARAMS
+                        运行参数
                       </div>
                       <div className="space-y-2">
                         <label className="flex items-center justify-between text-[9px] font-mono text-[var(--text-secondary)]">
-                          <span>TEMPERATURE</span>
+                          <span>温度</span>
                           <span>{temperature.toFixed(2)}</span>
                         </label>
                         <input
@@ -408,7 +412,7 @@ export default function AiQaPanel({ config, context }: AiQaPanelProps) {
                       </div>
                       <div className="space-y-2">
                         <label className="flex items-center justify-between text-[9px] font-mono text-[var(--text-secondary)]">
-                          <span>MAX TOKENS</span>
+                          <span>最大令牌数</span>
                           <span>{maxTokens}</span>
                         </label>
                         <input
@@ -422,7 +426,7 @@ export default function AiQaPanel({ config, context }: AiQaPanelProps) {
                         />
                       </div>
                       <label className="flex items-center justify-between text-[9px] font-mono text-[var(--text-secondary)]">
-                        <span>INCLUDE HISTORY</span>
+                        <span>携带历史上下文</span>
                         <input
                           type="checkbox"
                           checked={includeHistory}
@@ -473,7 +477,11 @@ export default function AiQaPanel({ config, context }: AiQaPanelProps) {
                             msg.role === 'user' ? 'text-cyan-300' : 'text-emerald-300'
                           }`}
                         >
-                          {msg.role === 'user' ? 'YOU' : (msg.agentId || 'AI').toUpperCase()}
+                          {msg.role === 'user'
+                            ? '你'
+                            : resolvedConfig.agents.find((agent) => agent.id === msg.agentId)?.label
+                              || msg.agentId
+                              || '助手'}
                         </span>
                         <span className="text-[7px] text-[var(--text-muted)] font-mono">
                           {formatTime(msg.createdAt)}
@@ -484,7 +492,7 @@ export default function AiQaPanel({ config, context }: AiQaPanelProps) {
                       </pre>
                       {msg.traceId && (
                         <div className="text-[7px] text-[var(--text-muted)] font-mono mt-1">
-                          trace: {msg.traceId}
+                          追踪: {msg.traceId}
                         </div>
                       )}
                     </div>
@@ -523,7 +531,7 @@ export default function AiQaPanel({ config, context }: AiQaPanelProps) {
                     className="inline-flex items-center gap-1 px-3 py-1.5 text-[10px] font-mono border border-cyan-500/50 text-cyan-300 bg-cyan-950/25 hover:bg-cyan-900/35 transition-colors disabled:opacity-40"
                   >
                     <SendHorizontal size={11} />
-                    {isSubmitting ? '发送中...' : resolvedConfig.sendButtonLabel}
+                    {isSubmitting ? '发送中' : resolvedConfig.sendButtonLabel}
                   </button>
                 </div>
               </div>

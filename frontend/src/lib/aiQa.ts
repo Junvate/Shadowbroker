@@ -73,8 +73,8 @@ export type AiQaConfigOverrides = Partial<
 const DEFAULT_AGENTS: AiQaAgentConfig[] = [
   {
     id: 'sentinel-ops',
-    label: 'Sentinel Ops',
-    description: '偏战术态势和告警分析，适合快速研判',
+    label: '哨兵作战助手',
+    description: '偏战术态势与告警分析，适合快速研判',
     systemPrompt:
       'You are Sentinel Ops. Respond with concise tactical intelligence and concrete actions.',
     defaultTemperature: 0.25,
@@ -82,7 +82,7 @@ const DEFAULT_AGENTS: AiQaAgentConfig[] = [
   },
   {
     id: 'mesh-analyst',
-    label: 'Mesh Analyst',
+    label: 'Mesh 网络分析师',
     description: '偏 Mesh / Wormhole / Agent 任务编排',
     systemPrompt:
       'You are Mesh Analyst. Focus on mesh-network operations, trust boundaries, and task routing.',
@@ -91,7 +91,7 @@ const DEFAULT_AGENTS: AiQaAgentConfig[] = [
   },
   {
     id: 'briefing-copilot',
-    label: 'Briefing Copilot',
+    label: '简报副驾',
     description: '偏简报生成，输出结构化结论',
     systemPrompt:
       'You are Briefing Copilot. Produce structured briefings with summary, risks, and next steps.',
@@ -102,9 +102,9 @@ const DEFAULT_AGENTS: AiQaAgentConfig[] = [
 
 export const DEFAULT_AI_QA_CONFIG: AiQaPanelConfig = {
   title: 'AI 问答',
-  subtitle: 'Agent-ready Console',
+  subtitle: '可接入 Agent 控制台',
   welcomeMessage:
-    'AI 问答模块已就绪。当前是前端壳体（可先用 mock），你后续可直接接入系统 Agent。',
+    'AI 问答模块已就绪。当前是前端壳体（可先用模拟模式），你后续可直接接入系统 Agent。',
   placeholder: '输入问题、任务指令或情报分析请求...',
   sendButtonLabel: '发送',
   storageKey: 'sb_ai_qa_v1',
@@ -219,7 +219,7 @@ function extractErrorMessage(payload: unknown, status: number): string {
     const message = asString(payload.message);
     if (message) return message;
   }
-  return `AI request failed (HTTP ${status})`;
+  return `AI 请求失败（HTTP ${status}）`;
 }
 
 function buildMockResponse(request: AiQaRequestPayload): string {
@@ -229,7 +229,7 @@ function buildMockResponse(request: AiQaRequestPayload): string {
   return [
     `[${request.agent.label}] 收到请求：${shortQuestion}`,
     '',
-    '这是前端 mock 回答。你后续接入系统 agent 时，只需改 `src/lib/aiQa.ts` 的 transport 或 requester。',
+    '这是前端模拟回答。你后续接入系统 Agent 时，只需改 `src/lib/aiQa.ts` 的 transport 或 requester。',
     '',
     '建议下一步：',
     '1. 接入真实接口并返回 `text` 字段',
@@ -264,7 +264,7 @@ async function requestViaHttp(
     }
     const text = extractTextFromResponse(payload);
     if (!text) {
-      throw new Error('AI response is missing text content');
+      throw new Error('AI 返回结果缺少文本内容');
     }
     const traceId = isRecord(payload) ? asString(payload.trace_id) : null;
     const agentId = isRecord(payload) ? asString(payload.agent_id) : null;
@@ -276,7 +276,7 @@ async function requestViaHttp(
     };
   } catch (error) {
     if (error instanceof Error && error.name === 'AbortError') {
-      throw new Error(`AI request timed out after ${config.transport.timeoutMs}ms`);
+      throw new Error(`AI 请求超时（>${config.transport.timeoutMs}ms）`);
     }
     throw error;
   } finally {
