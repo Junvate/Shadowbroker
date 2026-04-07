@@ -9,6 +9,7 @@ PORT_GRACE_SECONDS="${PORT_GRACE_SECONDS:-3}"
 FRONTEND_PORT="${FRONTEND_PORT:-6789}"
 BACKEND_PORT="${BACKEND_PORT:-8000}"
 CLEANUP_PORTS_ON_RESTART="${CLEANUP_PORTS_ON_RESTART:-1}"
+KILL_KNOWN_DEV_PROCESSES="${KILL_KNOWN_DEV_PROCESSES:-1}"
 
 usage() {
   cat <<'EOF'
@@ -23,6 +24,7 @@ Environment:
   RESTART_DELAY_SECONDS  Wait time between stop and start (default: 1)
   PORT_GRACE_SECONDS     Wait time after TERM before KILL on occupied ports (default: 3)
   CLEANUP_PORTS_ON_RESTART  Whether to cleanup stale listeners (1/0, default: 1)
+  KILL_KNOWN_DEV_PROCESSES  Whether to kill known stale dev process patterns (1/0, default: 1)
   FRONTEND_PORT          Passed through to start script
   BACKEND_PORT           Passed through to start script
 EOF
@@ -44,16 +46,31 @@ fi
 
 list_listen_pids() {
   local port="$1"
+  local pids=""
   if command -v lsof >/dev/null 2>&1; then
-    lsof -tiTCP:"$port" -sTCP:LISTEN 2>/dev/null | sort -u
+    pids="$(lsof -tiTCP:"$port" -sTCP:LISTEN 2>/dev/null | sort -u || true)"
+    if [[ -n "$pids" ]]; then
+      printf '%s\n' "$pids"
+      return
+    fi
+  fi
+  if command -v ss >/dev/null 2>&1; then
+    pids="$(ss -ltnp "sport = :$port" 2>/dev/null | grep -oE 'pid=[0-9]+' | cut -d= -f2 | sort -u || true)"
+    if [[ -n "$pids" ]]; then
+      printf '%s\n' "$pids"
+      return
+    fi
+  fi
+  if command -v netstat >/dev/null 2>&1; then
+    pids="$(netstat -ltnp 2>/dev/null | awk -v p=":$port" '$4 ~ p"$" {print $7}' | cut -d/ -f1 | sed '/^-/d' | sort -u || true)"
+    if [[ -n "$pids" ]]; then
+      printf '%s\n' "$pids"
+      return
+    fi
     return
   fi
   if command -v fuser >/dev/null 2>&1; then
     fuser "${port}/tcp" 2>/dev/null | tr ' ' '\n' | sed '/^$/d' | sort -u
-    return
-  fi
-  if command -v ss >/dev/null 2>&1; then
-    ss -ltnp "sport = :$port" 2>/dev/null | grep -oE 'pid=[0-9]+' | cut -d= -f2 | sort -u
     return
   fi
 }
@@ -100,6 +117,32 @@ cleanup_port() {
   done
 }
 
+kill_pattern() {
+  local signal="$1"
+  local pattern="$2"
+  if ! command -v pkill >/dev/null 2>&1; then
+    return
+  fi
+  pkill "$signal" -f "$pattern" 2>/dev/null || true
+}
+
+cleanup_known_dev_processes() {
+  echo "[dev-daemon] Restart: cleaning known stale dev process patterns..."
+  kill_pattern -TERM "node .*scripts/dev-all\\.cjs"
+  kill_pattern -TERM "next[^ ]* dev"
+  kill_pattern -TERM "npm --prefix frontend run dev"
+  kill_pattern -TERM "uvicorn .*main:app"
+
+  if [[ "$PORT_GRACE_SECONDS" =~ ^[0-9]+$ ]] && [[ "$PORT_GRACE_SECONDS" -gt 0 ]]; then
+    sleep "$PORT_GRACE_SECONDS"
+  fi
+
+  kill_pattern -KILL "node .*scripts/dev-all\\.cjs"
+  kill_pattern -KILL "next[^ ]* dev"
+  kill_pattern -KILL "npm --prefix frontend run dev"
+  kill_pattern -KILL "uvicorn .*main:app"
+}
+
 echo "[dev-daemon] Restart: stopping..."
 "$STOP_SCRIPT" || true
 
@@ -111,6 +154,10 @@ if [[ "$CLEANUP_PORTS_ON_RESTART" == "1" || "$CLEANUP_PORTS_ON_RESTART" == "true
   echo "[dev-daemon] Restart: cleaning stale listeners..."
   cleanup_port "$FRONTEND_PORT"
   cleanup_port "$BACKEND_PORT"
+fi
+
+if [[ "$KILL_KNOWN_DEV_PROCESSES" == "1" || "$KILL_KNOWN_DEV_PROCESSES" == "true" ]]; then
+  cleanup_known_dev_processes
 fi
 
 echo "[dev-daemon] Restart: starting..."
