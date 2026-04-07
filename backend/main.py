@@ -73,6 +73,7 @@ from services.config import get_settings
 import uvicorn
 import hashlib
 import math
+import ipaddress
 import json as json_mod
 import orjson
 import socket
@@ -1270,11 +1271,26 @@ def require_admin(request: Request):
 
 
 def _is_local_or_docker(host: str) -> bool:
-    """Return True if the IP is loopback or a Docker-internal private network."""
-    if host in {"127.0.0.1", "::1", "localhost"}:
+    """Return True if host resolves to loopback/private/unspecified local address space."""
+    normalized = str(host or "").strip().lower()
+    if not normalized:
+        return False
+    if normalized in {"localhost", "localhost.localdomain"}:
         return True
-    # Docker bridge networks use 172.x.x.x or 192.168.x.x ranges
-    if host.startswith("172.") or host.startswith("192.168.") or host.startswith("10."):
+    candidate = normalized.strip("[]").split("%", 1)[0]
+    try:
+        parsed_ip = ipaddress.ip_address(candidate)
+    except ValueError:
+        # Docker bridge networks use 172.x.x.x or 192.168.x.x ranges.
+        if candidate.startswith("172.") or candidate.startswith("192.168.") or candidate.startswith("10."):
+            return True
+        return False
+
+    # Handle IPv4-mapped IPv6 literals like ::ffff:127.0.0.1.
+    if isinstance(parsed_ip, ipaddress.IPv6Address) and parsed_ip.ipv4_mapped is not None:
+        parsed_ip = parsed_ip.ipv4_mapped
+
+    if parsed_ip.is_loopback or parsed_ip.is_private or parsed_ip.is_unspecified:
         return True
     return False
 
@@ -1295,6 +1311,8 @@ def _build_cors_origins():
     """Build a CORS origins whitelist: localhost + LAN IPs + env overrides.
     Falls back to wildcard only if auto-detection fails entirely."""
     origins = [
+        "http://localhost:6789",
+        "http://127.0.0.1:6789",
         "http://localhost:3000",
         "http://127.0.0.1:3000",
         "http://localhost:6873",
@@ -1308,6 +1326,7 @@ def _build_cors_origins():
         for info in socket.getaddrinfo(hostname, None, socket.AF_INET):
             ip = info[4][0]
             if ip not in ("127.0.0.1", "0.0.0.0"):
+                origins.append(f"http://{ip}:6789")
                 origins.append(f"http://{ip}:3000")
                 origins.append(f"http://{ip}:6873")
                 origins.append(f"http://{ip}:8000")
@@ -1493,10 +1512,10 @@ _SECURITY_HEADERS_PROD = {
     "Content-Security-Policy": (
         "default-src 'self'; "
         "script-src 'self' 'unsafe-inline' blob:; "
-        "style-src 'self' 'unsafe-inline'; "
+        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
         "img-src 'self' data: blob: https:; "
         "connect-src 'self' ws: wss: https:; "
-        "font-src 'self' data:; "
+        "font-src 'self' data: https://fonts.gstatic.com; "
         "object-src 'none'; "
         "frame-ancestors 'none'; "
         "base-uri 'self'"
@@ -1510,10 +1529,10 @@ _SECURITY_HEADERS_DEBUG = {
     "Content-Security-Policy": (
         "default-src 'self'; "
         "script-src 'self' 'unsafe-inline' 'unsafe-eval' blob:; "
-        "style-src 'self' 'unsafe-inline'; "
+        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
         "img-src 'self' data: blob: https:; "
         "connect-src 'self' ws: wss: http://127.0.0.1:8000 http://127.0.0.1:8787 https:; "
-        "font-src 'self' data:; "
+        "font-src 'self' data: https://fonts.gstatic.com; "
         "object-src 'none'; "
         "frame-ancestors 'none'; "
         "base-uri 'self'"

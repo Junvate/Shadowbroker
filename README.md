@@ -562,14 +562,14 @@ npm install
 ### Running
 
 ```bash
-# From the frontend directory — starts both frontend & backend concurrently
+# From repo root — starts frontend & backend concurrently
 npm run dev
 ```
 
 This starts:
 
-* **Next.js** frontend on `http://localhost:3000`
-* **FastAPI** backend on `http://localhost:8000`
+* **Next.js** frontend on `http://127.0.0.1:6789` (binds to `0.0.0.0`)
+* **FastAPI** backend on `http://127.0.0.1:8000` (binds to `0.0.0.0`)
 
 ### Pre-commit (Optional)
 

@@ -61,7 +61,7 @@ if %errorlevel% neq 0 (
 for /f "tokens=1 delims= " %%v in ('node --version 2^>^&1') do echo [*] Found Node.js %%v
 
 :: ── AGGRESSIVE ZOMBIE CLEANUP ──────────────────────────────────────
-:: Kill ANY process holding ports 8000 or 3000 (LISTENING, TIME_WAIT,
+:: Kill ANY process holding ports 8000, 6789, or 3000 (LISTENING, TIME_WAIT,
 :: ESTABLISHED — all states). Also kill orphaned uvicorn/ais_proxy
 :: processes that might be lingering from a previous crashed session.
 echo.
@@ -71,12 +71,15 @@ echo [*] Clearing zombie processes...
 for /f "tokens=5" %%a in ('netstat -ano ^| findstr ":8000 "') do (
     taskkill /F /PID %%a >nul 2>&1
 )
+for /f "tokens=5" %%a in ('netstat -ano ^| findstr ":6789 "') do (
+    taskkill /F /PID %%a >nul 2>&1
+)
 for /f "tokens=5" %%a in ('netstat -ano ^| findstr ":3000 "') do (
     taskkill /F /PID %%a >nul 2>&1
 )
 
 :: Note: wmic zombie-kill removed — hangs on Win11. Port-based kill above
-:: already catches any process holding 8000/3000.
+:: already catches any process holding 8000/6789/3000.
 
 :: Brief pause to let OS release the ports
 timeout /t 1 /nobreak >nul
@@ -85,6 +88,11 @@ timeout /t 1 /nobreak >nul
 netstat -ano | findstr ":8000 " | findstr "LISTENING" >nul 2>&1
 if %errorlevel% equ 0 (
     echo [!] WARNING: Port 8000 is still occupied! Waiting 3s for OS cleanup...
+    timeout /t 3 /nobreak >nul
+)
+netstat -ano | findstr ":6789 " | findstr "LISTENING" >nul 2>&1
+if %errorlevel% equ 0 (
+    echo [!] WARNING: Port 6789 is still occupied! Waiting 3s for OS cleanup...
     timeout /t 3 /nobreak >nul
 )
 netstat -ano | findstr ":3000 " | findstr "LISTENING" >nul 2>&1
@@ -174,7 +182,7 @@ echo [*] Frontend dependencies OK.
 echo.
 echo ===================================================
 echo   Starting services...
-echo   Dashboard: http://localhost:3000
+echo   Dashboard: http://localhost:6789
 echo   Keep this window open! Initial load takes ~10s.
 echo   This is the hardened web/local runtime, not the final native shell.
 echo   Security work must not come at the cost of unusable map responsiveness.

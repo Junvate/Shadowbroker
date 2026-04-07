@@ -6,6 +6,7 @@
     "dev:frontend": "npm --prefix frontend run dev:frontend",
     "dev:backend": "node start-backend.js",
     "dev:start": "bash ./dev-daemon-start.sh",
+    "dev:restart": "bash ./dev-daemon-restart.sh",
     "dev:stop": "bash ./dev-daemon-stop.sh",
     "dev:logs": "tail -f ./.dev-daemon/dev.log"
   }

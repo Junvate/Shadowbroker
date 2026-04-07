@@ -62,12 +62,12 @@ const securityHeaders = [
       isDev
         ? "script-src 'self' 'unsafe-inline' 'unsafe-eval' blob:"
         : "script-src 'self' 'unsafe-inline' blob:",
-      "style-src 'self' 'unsafe-inline'",
+      "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
       "img-src 'self' data: blob: https:",
       isDev
         ? "connect-src 'self' ws: wss: http://127.0.0.1:8000 http://127.0.0.1:8787 https:"
         : "connect-src 'self' ws: wss: https:",
-      "font-src 'self' data:",
+      "font-src 'self' data: https://fonts.gstatic.com",
       "object-src 'none'",
       "worker-src 'self' blob:",
       "child-src 'self' blob:",

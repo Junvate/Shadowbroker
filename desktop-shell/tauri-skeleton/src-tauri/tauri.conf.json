@@ -5,7 +5,7 @@
   "identifier": "com.shadowbroker.desktop",
   "build": {
     "frontendDist": "../../frontend/.next",
-    "devUrl": "http://127.0.0.1:3000"
+    "devUrl": "http://127.0.0.1:6789"
   },
   "app": {
     "windows": [

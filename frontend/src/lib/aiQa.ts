@@ -118,13 +118,13 @@ export const DEFAULT_AI_QA_CONFIG: AiQaPanelConfig = {
   defaultAgentId: 'sentinel-ops',
   agents: DEFAULT_AGENTS,
   transport: {
-    mode: 'mock',
+    mode: 'http',
     endpoint: '/api/ai/qa',
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
     },
-    timeoutMs: 25000,
+    timeoutMs: 90000,
     includeHistoryByDefault: true,
   },
 };
@@ -238,6 +238,12 @@ function buildMockResponse(request: AiQaRequestPayload): string {
   ].join('\n');
 }
 
+function resolveTransportUrl(endpoint: string): string {
+  const trimmed = String(endpoint || '').trim();
+  if (/^https?:\/\//i.test(trimmed)) return trimmed;
+  return `${API_BASE}${trimmed}`;
+}
+
 async function requestViaHttp(
   config: AiQaPanelConfig,
   request: AiQaRequestPayload,
@@ -245,7 +251,7 @@ async function requestViaHttp(
   const controller = new AbortController();
   const timeout = window.setTimeout(() => controller.abort(), config.transport.timeoutMs);
   try {
-    const res = await fetch(`${API_BASE}${config.transport.endpoint}`, {
+    const res = await fetch(resolveTransportUrl(config.transport.endpoint), {
       method: config.transport.method,
       headers: config.transport.headers,
       body: JSON.stringify({
