@@ -1,0 +1,7 @@
+interface:
+  display_name: "Shadowbroker OSINT 查询"
+  short_description: "快速查询 API 与后端数据文件。"
+  default_prompt: "使用 $shadowbroker-osint-query 将问题映射到合适的端点或数据文件，执行聚焦查询，并返回简洁证据。"
+
+policy:
+  allow_implicit_invocation: true
