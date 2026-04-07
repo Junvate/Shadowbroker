@@ -1297,6 +1297,8 @@ def _build_cors_origins():
     origins = [
         "http://localhost:3000",
         "http://127.0.0.1:3000",
+        "http://localhost:6873",
+        "http://127.0.0.1:6873",
         "http://localhost:8000",
         "http://127.0.0.1:8000",
     ]
@@ -1307,6 +1309,7 @@ def _build_cors_origins():
             ip = info[4][0]
             if ip not in ("127.0.0.1", "0.0.0.0"):
                 origins.append(f"http://{ip}:3000")
+                origins.append(f"http://{ip}:6873")
                 origins.append(f"http://{ip}:8000")
     except Exception:
         pass

@@ -6,6 +6,7 @@ const frontendDir = path.resolve(__dirname, "..");
 const backendLauncher = path.resolve(frontendDir, "..", "start-backend.js");
 const nextBin = require.resolve("next/dist/bin/next");
 const backendDir = path.resolve(frontendDir, "..", "backend");
+const frontendPort = String(process.env.FRONTEND_PORT || "6873");
 const backendVenvCandidates = process.platform === "win32"
   ? [
       path.resolve(backendDir, "venv", "Scripts", "python.exe"),
@@ -77,7 +78,7 @@ process.on("SIGTERM", () => shutdown(0));
 start(
   "frontend",
   process.execPath,
-  [nextBin, "dev", "--hostname", "127.0.0.1", "--port", "3000"],
+  [nextBin, "dev", "--hostname", "127.0.0.1", "--port", frontendPort],
   frontendDir,
 );
 
