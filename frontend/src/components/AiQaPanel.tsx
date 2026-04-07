@@ -392,7 +392,7 @@ export default function AiQaPanel({ config, context }: AiQaPanelProps) {
       initial={{ y: 20, opacity: 0 }}
       animate={{ y: 0, opacity: 1 }}
       transition={{ duration: 0.35 }}
-      className="w-full md:w-[36rem] md:max-w-[calc(100vw-3rem)] md:ml-[-16rem] bg-[#0a0a0a]/90 backdrop-blur-sm border border-cyan-900/40 pointer-events-auto flex flex-col relative overflow-hidden"
+      className="w-full max-w-full bg-[#0a0a0a]/90 backdrop-blur-sm border border-cyan-900/40 pointer-events-auto flex flex-col relative overflow-hidden"
     >
       <div
         className="px-3 py-2.5 border-b border-[var(--border-primary)]/50 flex items-center justify-between cursor-pointer hover:bg-[var(--hover-accent)] transition-colors"
