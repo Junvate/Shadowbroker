@@ -9,6 +9,20 @@ npm install
 npm run dev        # http://localhost:3000
 ```
 
+## Auto Chinese Translation
+
+The frontend now supports full-page automatic Chinese translation via NiuTrans (recommended).
+
+Set API key in backend env before starting dev:
+
+```bash
+# edit backend/.env
+# NIUTRANS_API_KEY=your_niutrans_key
+npm run dev
+```
+
+If `NIUTRANS_API_KEY` is missing in `backend/.env`, the app still runs but auto-translation will be skipped.
+
 ## API URL Configuration
 
 The frontend needs to reach the backend (default port `8000`). Resolution order:

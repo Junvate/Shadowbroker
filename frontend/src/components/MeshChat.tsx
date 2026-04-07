@@ -3917,7 +3917,7 @@ const MeshChat = React.memo(function MeshChat({
           <div className="flex items-center gap-2">
             <span className="text-cyan-800/50 font-mono text-[13px] select-none">──</span>
             <span className="text-[12px] text-cyan-400/90 font-mono tracking-widest" style={{ textShadow: '0 0 8px rgba(34,211,238,0.3)' }}>
-              MESH CHAT
+              网状通信
             </span>
             <span className="text-cyan-800/50 font-mono text-[13px] select-none overflow-hidden whitespace-nowrap flex-1">──────────────────────────────</span>
           </div>
@@ -3942,11 +3942,11 @@ const MeshChat = React.memo(function MeshChat({
             {/* TAB BAR */}
             <div className="flex border-b border-[var(--border-primary)]/50 shrink-0">
               {[
-                { key: 'infonet' as Tab, label: 'INFONET', icon: <Shield size={10} />, badge: 0 },
-                { key: 'meshtastic' as Tab, label: 'MESH', icon: <Radio size={10} />, badge: 0 },
+                { key: 'infonet' as Tab, label: '内网', icon: <Shield size={10} />, badge: 0 },
+                { key: 'meshtastic' as Tab, label: '网状', icon: <Radio size={10} />, badge: 0 },
                 {
                   key: 'dms' as Tab,
-                  label: 'DEAD DROP',
+                  label: '死信箱',
                   icon: <Lock size={10} />,
                   badge: totalDmNotify,
                 },
@@ -4580,7 +4580,7 @@ const MeshChat = React.memo(function MeshChat({
                             : 'border-[var(--border-primary)]/40 text-[var(--text-muted)] hover:text-green-300'
                         }`}
                       >
-                        CHANNEL
+                        频道
                       </button>
                       <button
                         onClick={() => setMeshView('inbox')}
@@ -4590,29 +4590,29 @@ const MeshChat = React.memo(function MeshChat({
                             : 'border-[var(--border-primary)]/40 text-[var(--text-muted)] hover:text-amber-300'
                         }`}
                       >
-                        INBOX
+                        收件箱
                       </button>
                     </div>
                     <div className="text-[10px] font-mono text-[var(--text-muted)] truncate">
-                      {publicMeshAddress ? `ADDR ${publicMeshAddress.toUpperCase()}` : 'NO PUBLIC MESH ADDRESS'}
+                      {publicMeshAddress ? `地址 ${publicMeshAddress.toUpperCase()}` : '无公网网状地址'}
                     </div>
                   </div>
                   <div className="flex-1 overflow-y-auto styled-scrollbar px-3 py-1.5 border-l-2 border-cyan-800/25">
                     {meshView === 'channel' && filteredMeshMessages.length === 0 && (
                       <div className="text-[12px] font-mono text-[var(--text-muted)] text-center py-4 leading-[1.65]">
-                        No messages from {meshRegion} / {meshChannel}
+                        暂无来自 {meshRegion} / {meshChannel} 的消息
                       </div>
                     )}
                     {meshView === 'inbox' && (
                       <>
                         {!publicMeshAddress && (
                           <div className="text-[12px] font-mono text-[var(--text-muted)] text-center py-4 leading-[1.65]">
-                            Create or load a public mesh identity to see direct Meshtastic traffic.
+                            请先创建或加载公网 Mesh 身份，才能查看 Meshtastic 直连消息。
                           </div>
                         )}
                         {publicMeshAddress && meshInboxMessages.length === 0 && (
                           <div className="text-[12px] font-mono text-[var(--text-muted)] text-center py-4 leading-[1.65]">
-                            No public direct messages addressed to {publicMeshAddress.toUpperCase()} yet.
+                            暂无发往 {publicMeshAddress.toUpperCase()} 的公网直连消息。
                           </div>
                         )}
                         {meshInboxMessages.map((m, i) => (
@@ -4626,7 +4626,7 @@ const MeshChat = React.memo(function MeshChat({
                               </button>
                               <div className="flex-1 min-w-0">
                                 <div className="text-[10px] text-amber-200/70 mb-0.5">
-                                  TO {publicMeshAddress.toUpperCase()}
+                                  发往 {publicMeshAddress.toUpperCase()}
                                 </div>
                                 <div className="break-words whitespace-pre-wrap text-amber-100/90">
                                   {m.text}
@@ -4812,7 +4812,7 @@ const MeshChat = React.memo(function MeshChat({
                               : 'text-[var(--text-muted)] hover:text-gray-400'
                           }`}
                         >
-                          INBOX
+                          收件箱
                           {accessRequests.length > 0 && (
                             <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-[blink_1s_step-end_infinite]" />
                           )}
@@ -5325,19 +5325,19 @@ const MeshChat = React.memo(function MeshChat({
                   <span className="text-[11px] font-mono tracking-widest text-[var(--text-muted)] uppercase">
                     {activeTab === 'infonet'
                       ? privateInfonetReady
-                        ? `→ INFONET${selectedGate ? ` / ${selectedGate}` : ''}${privateInfonetTransportReady ? '' : ' / EXPERIMENTAL ENCRYPTION'}`
-                        : '→ PRIVATE LANE LOCKED'
+                        ? `→ 内网${selectedGate ? ` / ${selectedGate}` : ''}${privateInfonetTransportReady ? '' : ' / 实验加密'}`
+                        : '→ 私有通道已锁定'
                       : activeTab === 'meshtastic'
                         ? hasPublicLaneIdentity
                           ? meshDirectTarget
-                            ? `→ MESH / TO ${meshDirectTarget.toUpperCase()}`
-                            : `→ MESH / ${meshRegion} / ${meshChannel}`
-                          : '→ MESH LOCKED'
+                            ? `→ 网状 / 发往 ${meshDirectTarget.toUpperCase()}`
+                            : `→ 网状 / ${meshRegion} / ${meshChannel}`
+                          : '→ 网状已锁定'
                         : activeTab === 'dms' && secureDmBlocked
-                          ? '→ DEAD DROP LOCKED'
+                          ? '→ 死信箱已锁定'
                         : dmView === 'chat' && selectedContact
-                          ? `→ DEAD DROP / ${selectedContact.slice(0, 14)}`
-                          : '→ SELECT TARGET'}
+                          ? `→ 死信箱 / ${selectedContact.slice(0, 14)}`
+                          : '→ 选择目标'}
                   </span>
                 )}
               </div>
@@ -5354,7 +5354,7 @@ const MeshChat = React.memo(function MeshChat({
                   {meshQuickStatus?.text ||
                     (publicMeshBlockedByWormhole
                       ? 'Wormhole is active. Turn it off here and we will mint a separate public mesh key for you.'
-                      : 'Public mesh posting needs a mesh key. One tap gets you a fresh address.')}
+                      : '公网 Mesh 发言需要密钥，一键即可生成新地址。')}
                 </div>
               )}
               <div className="flex items-center gap-2 px-3 pb-2 pt-1">
@@ -5365,10 +5365,10 @@ const MeshChat = React.memo(function MeshChat({
                   >
                     <span className="inline-flex items-center gap-2 text-sm font-mono tracking-[0.2em]">
                       <Shield size={11} />
-                      UNLOCK INFONET
+                      解锁内网
                     </span>
                     <span className="text-[12px] font-mono text-cyan-300/70">
-                      OPEN PRIVATE LANE BRIEF
+                      打开私有通道说明
                     </span>
                   </button>
                 ) : activeTab === 'dms' && secureDmBlocked ? (
@@ -5378,10 +5378,10 @@ const MeshChat = React.memo(function MeshChat({
                   >
                     <span className="inline-flex items-center gap-2 text-sm font-mono tracking-[0.2em]">
                       <Lock size={11} />
-                      UNLOCK DEAD DROP
+                      解锁死信箱
                     </span>
                     <span className="text-[12px] font-mono text-cyan-300/70">
-                      NEED WORMHOLE
+                      需要虫洞
                     </span>
                   </button>
                 ) : activeTab === 'meshtastic' && !hasPublicLaneIdentity ? (
@@ -5399,17 +5399,17 @@ const MeshChat = React.memo(function MeshChat({
                     <span className="inline-flex items-center gap-2 text-sm font-mono tracking-[0.2em]">
                       <Radio size={11} />
                       {identityWizardBusy
-                        ? 'GETTING MESH KEY'
+                        ? '正在获取 Mesh 密钥'
                         : publicMeshBlockedByWormhole
-                          ? 'TURN OFF WORMHOLE FOR MESH'
-                          : 'GET MESH KEY'}
+                          ? '为 Mesh 关闭虫洞'
+                          : '获取 Mesh 密钥'}
                     </span>
                     <span className="text-[12px] font-mono text-green-300/70">
                       {identityWizardBusy
-                        ? 'WORKING...'
+                        ? '处理中...'
                         : publicMeshBlockedByWormhole
-                          ? 'AUTO FIX'
-                          : 'ONE TAP'}
+                          ? '自动修复'
+                          : '一键完成'}
                     </span>
                   </button>
                 ) : activeTab === 'meshtastic' && meshDirectTarget ? (
@@ -5419,9 +5419,9 @@ const MeshChat = React.memo(function MeshChat({
                   >
                     <span className="inline-flex items-center gap-2 text-sm font-mono tracking-[0.2em]">
                       <Send size={11} />
-                      DIRECT TO {meshDirectTarget.toUpperCase()}
+                      直发到 {meshDirectTarget.toUpperCase()}
                     </span>
-                    <span className="text-[12px] font-mono text-amber-200/70">RETURN TO CHANNEL</span>
+                    <span className="text-[12px] font-mono text-amber-200/70">返回频道</span>
                   </button>
                 ) : activeTab === 'infonet' &&
                   privateInfonetReady &&
@@ -5678,10 +5678,10 @@ const MeshChat = React.memo(function MeshChat({
                   className="w-full text-left px-3 py-2 border border-green-500/30 bg-green-950/10 hover:bg-green-950/20 text-sm font-mono text-green-300 disabled:opacity-50"
                 >
                   {hasPublicLaneIdentity
-                    ? 'MESH KEY ACTIVE'
+                    ? 'Mesh 密钥已激活'
                     : publicMeshBlockedByWormhole
-                      ? 'TURN OFF WORMHOLE FOR MESH'
-                      : 'GET MESH KEY'}
+                      ? '为 Mesh 关闭虫洞'
+                      : '获取 Mesh 密钥'}
                   <div className="mt-1 text-[13px] text-green-200/70 normal-case tracking-normal leading-[1.45]">
                     {hasPublicLaneIdentity
                       ? 'Your public mesh key is already live for posting.'

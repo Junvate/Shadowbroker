@@ -40,6 +40,7 @@ import {
 } from 'lucide-react';
 import { API_BASE } from '@/lib/api';
 import { onTileLoadingChange, resetTileLoading } from '@/lib/sentinelHub';
+import { lookupStaticZh } from '@/lib/zhStaticDictionary';
 import packageJson from '../../package.json';
 import { useTheme } from '@/lib/ThemeContext';
 
@@ -1051,13 +1052,13 @@ const WorldviewLeftPanel = React.memo(function WorldviewLeftPanel({
       {/* Header */}
       <div className="mb-6 pointer-events-auto">
         <div className="text-[10px] text-[var(--text-secondary)] font-mono tracking-widest mb-1">
-          TOP SECRET // SI-TK // NOFORN
+          绝密 // SI-TK // NOFORN
         </div>
         <div className="text-[10px] text-[var(--text-muted)] font-mono tracking-widest mb-4">
           KH11-4094 OPS-4168
         </div>
         <div className="flex items-center gap-3">
-          <h1 className="text-2xl font-bold tracking-[0.2em] text-[var(--text-heading)]">FLIR</h1>
+          <h1 className="text-2xl font-bold tracking-[0.2em] text-[var(--text-heading)]">热成像</h1>
           <button
             onClick={toggleTheme}
             className={`w-7 h-7 border border-[var(--border-primary)] hover:border-cyan-500/50 flex items-center justify-center ${theme === 'dark' ? 'text-cyan-400' : 'text-[var(--text-muted)]'} hover:text-cyan-300 transition-all hover:bg-[var(--hover-accent)]`}
@@ -1091,7 +1092,7 @@ const WorldviewLeftPanel = React.memo(function WorldviewLeftPanel({
               title="Map Legend / Icon Key"
             >
               <BookOpen size={12} />
-              <span className="text-[8px] font-mono tracking-widest font-bold">KEY</span>
+              <span className="text-[8px] font-mono tracking-widest font-bold">图例</span>
             </button>
           )}
           <span
@@ -1112,7 +1113,7 @@ const WorldviewLeftPanel = React.memo(function WorldviewLeftPanel({
           <span
             className="text-[12px] text-[var(--text-muted)] font-mono tracking-widest"
           >
-            DATA LAYERS
+            数据图层
           </span>
           <div className="flex items-center gap-2">
             <button
@@ -1195,7 +1196,7 @@ const WorldviewLeftPanel = React.memo(function WorldviewLeftPanel({
                       <div className="flex items-center gap-2">
                         <Shield size={14} className="text-[#ff1493]" />
                         <span className="text-[12px] text-[#ff1493] font-mono tracking-widest font-bold">
-                          POTUS FLEET
+                          总统机队
                         </span>
                         <span className="text-[9px] font-mono px-1.5 py-0.5 rounded-full bg-[#ff1493]/20 border border-[#ff1493]/40 text-[#ff1493] animate-pulse">
                           {potusFlights.length} ACTIVE
@@ -1207,9 +1208,9 @@ const WorldviewLeftPanel = React.memo(function WorldviewLeftPanel({
                           setPotusEnabled(false);
                         }}
                         className="text-[8px] font-mono text-[var(--text-muted)] hover:text-[#ff1493] border border-[var(--border-primary)] hover:border-[#ff1493]/40 px-1.5 py-0.5 transition-colors"
-                        title="Hide POTUS Fleet tracker"
+                        title="隐藏总统机队追踪"
                       >
-                        HIDE
+                        隐藏
                       </button>
                     </div>
                     <div className="flex flex-col gap-2">
@@ -1251,7 +1252,7 @@ const WorldviewLeftPanel = React.memo(function WorldviewLeftPanel({
                                 style={{ backgroundColor: color }}
                               />
                               <span className="text-[8px] font-mono" style={{ color }}>
-                                TRACK
+                                追踪
                               </span>
                             </div>
                           </div>
@@ -1303,7 +1304,7 @@ const WorldviewLeftPanel = React.memo(function WorldviewLeftPanel({
                               section.label === 'SHODAN' ? 'text-green-400' : 'text-[var(--text-muted)]'
                             }`}
                           >
-                            {section.label}
+                            {lookupStaticZh(section.label) || section.label}
                           </span>
                           {anyOn && totalCount > 0 && (
                             <span
@@ -1339,7 +1340,9 @@ const WorldviewLeftPanel = React.memo(function WorldviewLeftPanel({
                             });
                           }}
                           title={
-                            allOn ? `Disable all ${section.label}` : `Enable all ${section.label}`
+                            allOn
+                              ? `关闭全部 ${lookupStaticZh(section.label) || section.label}`
+                              : `开启全部 ${lookupStaticZh(section.label) || section.label}`
                           }
                         >
                           <span
@@ -1405,7 +1408,7 @@ const WorldviewLeftPanel = React.memo(function WorldviewLeftPanel({
                                               : 'text-[var(--text-secondary)]'
                                         } tracking-wide`}
                                       >
-                                        {layer.name}
+                                        {lookupStaticZh(layer.name) || layer.name}
                                       </span>
                                       <span className="text-[8px] text-[var(--text-muted)] font-mono tracking-wider mt-0.5">
                                         {layer.id === 'shodan_overlay'
@@ -1617,7 +1620,7 @@ const WorldviewLeftPanel = React.memo(function WorldviewLeftPanel({
                       <div className="flex items-center gap-2">
                         <Shield size={14} className="text-[var(--text-muted)]" />
                         <span className="text-[10px] text-[var(--text-muted)] font-mono tracking-widest">
-                          POTUS FLEET
+                          总统机队
                         </span>
                       </div>
                       {!potusEnabled ? (
@@ -1628,11 +1631,11 @@ const WorldviewLeftPanel = React.memo(function WorldviewLeftPanel({
                           }}
                           className="text-[8px] font-mono text-[var(--text-muted)] hover:text-[#ff1493] border border-[var(--border-primary)] hover:border-[#ff1493]/40 px-1.5 py-0.5 transition-colors"
                         >
-                          SHOW
+                          显示
                         </button>
                       ) : (
                         <span className="text-[8px] font-mono text-[var(--text-muted)]">
-                          NO ACTIVE AIRCRAFT
+                          暂无活跃飞机
                         </span>
                       )}
                     </div>

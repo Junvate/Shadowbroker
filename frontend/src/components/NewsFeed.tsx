@@ -20,6 +20,30 @@ function formatTime(pubDate: string) {
     }
 }
 
+function zhThreatLevel(level: string | undefined): string {
+    const value = String(level || '').toUpperCase();
+    if (value === 'SEVERE') return '严重';
+    if (value === 'HIGH') return '高';
+    if (value === 'ELEVATED') return '升高';
+    if (value === 'GUARDED') return '戒备';
+    if (value === 'LOW') return '低';
+    if (value === 'ROUTINE') return '常规';
+    return value || '未知';
+}
+
+function localizeAssessment(text: string): string {
+    return text
+        .replace(/SYS\.ANALYSIS/gi, '系统分析')
+        .replace(/\bORACLE\b/gi, '预言机')
+        .replace(/\bSENTIMENT\b/gi, '情绪')
+        .replace(/\bCRITICAL\b/gi, '严重')
+        .replace(/\bELEVATED\b/gi, '升高')
+        .replace(/\bROUTINE\b/gi, '常规')
+        .replace(/\bNEGATIVE\b/gi, '负向')
+        .replace(/\bPOSITIVE\b/gi, '正向')
+        .replace(/\bNEUTRAL\b/gi, '中性');
+}
+
 // ICAO type designator → Wikipedia article title
 const AIRCRAFT_WIKI: Record<string, string> = {
     // Boeing widebodies
@@ -329,7 +353,7 @@ function NewsFeedInner({ selectedEntity, regionDossier, regionDossierLoading, on
                     <div className="flex justify-between"><span className="text-[var(--text-muted)]">OS</span><span className="text-[var(--text-primary)] text-right max-w-[190px]">{host.os || 'UNKNOWN'}</span></div>
                     <div className="flex justify-between"><span className="text-[var(--text-muted)]">PRODUCT</span><span className="text-[var(--text-primary)] text-right max-w-[190px]">{host.product || host.transport || 'UNKNOWN'}</span></div>
                     <div className="flex justify-between"><span className="text-[var(--text-muted)]">SEEN</span><span className="text-[var(--text-primary)] text-right max-w-[190px]">{host.timestamp || host.services?.[0]?.timestamp || 'UNKNOWN'}</span></div>
-                    <div className="flex justify-between"><span className="text-[var(--text-muted)]">LOCATION</span><span className="text-[var(--text-primary)] text-right max-w-[190px]">{host.location_label || host.country_name || 'UNMAPPED'}</span></div>
+                    <div className="flex justify-between"><span className="text-[var(--text-muted)]">位置</span><span className="text-[var(--text-primary)] text-right max-w-[190px]">{host.location_label || host.country_name || '未映射'}</span></div>
                     <div className="flex justify-between"><span className="text-[var(--text-muted)]">COORDS</span><span className="text-[var(--text-primary)] text-right max-w-[190px]">{host.lat != null && host.lng != null ? `${Number(host.lat).toFixed(4)}, ${Number(host.lng).toFixed(4)}` : 'UNMAPPED'}</span></div>
                     <div className="flex justify-between"><span className="text-[var(--text-muted)]">HOSTNAMES</span><span className="text-[var(--text-primary)] text-right max-w-[190px]">{host.hostnames?.length ? host.hostnames.join(', ') : 'NONE'}</span></div>
                     <div className="flex justify-between"><span className="text-[var(--text-muted)]">DOMAINS</span><span className="text-[var(--text-primary)] text-right max-w-[190px]">{host.domains?.length ? host.domains.join(', ') : 'NONE'}</span></div>
@@ -845,7 +869,7 @@ function NewsFeedInner({ selectedEntity, regionDossier, regionDossierLoading, on
 
                     <div className="p-4 flex flex-col gap-3">
                         <div className="flex justify-between items-center border-b border-[var(--border-primary)] pb-2">
-                            <span className="text-[var(--text-muted)] text-[10px]">LOCATION</span>
+                            <span className="text-[var(--text-muted)] text-[10px]">位置</span>
                             <span className="text-[var(--text-primary)] text-xs font-bold text-right ml-4">{props.name || 'UNKNOWN REGION'}</span>
                         </div>
                         <div className="flex justify-between items-center border-b border-[var(--border-primary)] pb-2">
@@ -945,9 +969,9 @@ function NewsFeedInner({ selectedEntity, regionDossier, regionDossierLoading, on
                 >
                     <div className="p-3 border-b border-red-500/30 bg-red-950/40 flex justify-between items-center">
                         <h2 className="text-xs tracking-widest font-bold text-red-400 flex items-center gap-2">
-                            <AlertTriangle size={14} className="text-red-400" /> THREAT INTERCEPT
+                            <AlertTriangle size={14} className="text-red-400" /> 威胁拦截
                         </h2>
-                        <span className="text-[10px] text-[var(--text-muted)] font-mono">LVL: {item.risk_score}/10</span>
+                        <span className="text-[10px] text-[var(--text-muted)] font-mono">等级: {item.risk_score}/10</span>
                     </div>
 
                     <div className="p-4 flex flex-col gap-3">
@@ -963,7 +987,7 @@ function NewsFeedInner({ selectedEntity, regionDossier, regionDossierLoading, on
                             <div className="flex justify-between items-center border-b border-[var(--border-primary)] pb-2">
                                 <span className="text-[var(--text-muted)] text-[10px]">ORACLE SCORE</span>
                                 <span className={`text-xs font-bold ${item.oracle_score >= 7 ? 'text-red-400' : item.oracle_score >= 4 ? 'text-yellow-400' : 'text-green-400'}`}>
-                                    {item.oracle_score}/10 [{item.oracle_score >= 7 ? 'CRITICAL' : item.oracle_score >= 4 ? 'ELEVATED' : 'ROUTINE'}]
+                                    {item.oracle_score}/10 [{item.oracle_score >= 7 ? '严重' : item.oracle_score >= 4 ? '升高' : '常规'}]
                                 </span>
                             </div>
                         )}
@@ -971,7 +995,7 @@ function NewsFeedInner({ selectedEntity, regionDossier, regionDossierLoading, on
                             <div className="flex justify-between items-center border-b border-[var(--border-primary)] pb-2">
                                 <span className="text-[var(--text-muted)] text-[10px]">SENTIMENT</span>
                                 <span className={`text-xs font-bold ${item.sentiment <= -0.05 ? 'text-red-400' : item.sentiment >= 0.05 ? 'text-green-400' : 'text-gray-400'}`}>
-                                    {item.sentiment > 0 ? '+' : ''}{item.sentiment.toFixed(2)} [{item.sentiment <= -0.05 ? 'NEGATIVE' : item.sentiment >= 0.05 ? 'POSITIVE' : 'NEUTRAL'}]
+                                    {item.sentiment > 0 ? '+' : ''}{item.sentiment.toFixed(2)} [{item.sentiment <= -0.05 ? '负向' : item.sentiment >= 0.05 ? '正向' : '中性'}]
                                 </span>
                             </div>
                         )}
@@ -991,8 +1015,8 @@ function NewsFeedInner({ selectedEntity, regionDossier, regionDossierLoading, on
                         {item.machine_assessment && (
                             <div className="mt-2 p-2 bg-black/60 border border-cyan-800/50 rounded-sm text-[9px] text-cyan-400 font-mono leading-tight relative overflow-hidden shadow-[inset_0_0_10px_rgba(0,255,255,0.05)]">
                                 <div className="absolute top-0 left-0 w-[2px] h-full bg-cyan-500 animate-pulse"></div>
-                                <span className="font-bold text-white">&gt;_ SYS.ANALYSIS: </span>
-                                <span className="text-cyan-300 opacity-90">{item.machine_assessment}</span>
+                                <span className="font-bold text-white">&gt;_ 系统分析: </span>
+                                <span className="text-cyan-300 opacity-90">{localizeAssessment(item.machine_assessment)}</span>
                             </div>
                         )}
                         {item.link && (
@@ -1032,7 +1056,7 @@ function NewsFeedInner({ selectedEntity, regionDossier, regionDossierLoading, on
                             <span className="text-[var(--text-primary)] text-[10px] font-bold text-right ml-4 break-words">{apt.name}</span>
                         </div>
                         <div className="flex justify-between items-center border-b border-[var(--border-primary)] pb-2">
-                            <span className="text-[var(--text-muted)] text-[10px]">COORDINATES</span>
+                            <span className="text-[var(--text-muted)] text-[10px]">坐标</span>
                             <span className="text-[var(--text-primary)] text-xs font-bold">{apt.lat.toFixed(4)}, {apt.lng.toFixed(4)}</span>
                         </div>
                         <div className="flex justify-between items-center border-b border-[var(--border-primary)] pb-2">
@@ -1061,7 +1085,7 @@ function NewsFeedInner({ selectedEntity, regionDossier, regionDossierLoading, on
             >
                 <div className="flex justify-between items-center relative z-10">
                     <h2 className="text-xs tracking-widest font-bold text-cyan-400 flex items-center gap-2">
-                        <AlertTriangle size={14} /> GLOBAL THREAT INTERCEPT
+                        <AlertTriangle size={14} /> 全球威胁拦截
                     </h2>
                     <button className="text-cyan-500 hover:text-[var(--text-primary)] transition-colors">
                         {isMinimized ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
@@ -1076,8 +1100,8 @@ function NewsFeedInner({ selectedEntity, regionDossier, regionDossierLoading, on
                             exit={{ height: 0, opacity: 0 }}
                             className="text-[10px] text-cyan-500/80 mt-1 flex items-center justify-between font-bold relative z-10"
                         >
-                            <span className="px-1 border border-cyan-500/30">SYS.STATUS: MONITORING</span>
-                            <span className="flex items-center gap-1"><Clock size={10} /> {data?.last_updated ? formatTime(data.last_updated) : "SCANNING"}</span>
+                            <span className="px-1 border border-cyan-500/30">系统状态：监控中</span>
+                            <span className="flex items-center gap-1"><Clock size={10} /> {data?.last_updated ? formatTime(data.last_updated) : "扫描中"}</span>
                         </motion.div>
                     )}
                 </AnimatePresence>
@@ -1105,7 +1129,7 @@ function NewsFeedInner({ selectedEntity, regionDossier, regionDossierLoading, on
                                 data.threat_level.level === 'SEVERE' || data.threat_level.level === 'HIGH' ? 'animate-pulse' : ''
                             }`} style={{ backgroundColor: data.threat_level.color }} />
                             <span className="text-[9px] font-bold tracking-wider" style={{ color: data.threat_level.color }}>
-                                THREAT: {data.threat_level.level}
+                                威胁：{zhThreatLevel(data.threat_level.level)}
                             </span>
                             <span className="text-[9px] text-[var(--text-muted)] ml-auto">
                                 {data.threat_level.score}/100
@@ -1324,7 +1348,7 @@ function NewsFeedInner({ selectedEntity, regionDossier, regionDossierLoading, on
                                 >
                                     <div className="flex items-center justify-between text-[8px] text-[var(--text-secondary)] uppercase tracking-widest">
                                         <span className="font-bold flex items-center gap-1 text-white">
-                                            {isBreaking && <span className="text-red-400 mr-1">BREAKING</span>}
+                                            {isBreaking && <span className="text-red-400 mr-1">突发</span>}
                                             &gt;_ {item.source}
                                         </span>
                                         <span>[{item.published ? formatTime(item.published) : ''}]</span>
@@ -1340,8 +1364,8 @@ function NewsFeedInner({ selectedEntity, regionDossier, regionDossierLoading, on
                                     {item.machine_assessment && (
                                         <div className="mt-1 p-1.5 bg-black/60 border border-cyan-800/50 rounded-sm text-[8.5px] text-cyan-400 font-mono leading-tight relative overflow-hidden shadow-[inset_0_0_10px_rgba(0,255,255,0.05)]">
                                             <div className="absolute top-0 left-0 w-[2px] h-full bg-cyan-500 animate-pulse"></div>
-                                            <span className="font-bold text-white">&gt;_ SYS.ANALYSIS: </span>
-                                            <span className="text-cyan-300 opacity-90">{item.machine_assessment}</span>
+                                            <span className="font-bold text-white">&gt;_ 系统分析: </span>
+                                            <span className="text-cyan-300 opacity-90">{localizeAssessment(item.machine_assessment)}</span>
                                         </div>
                                     )}
                                     {item.prediction_odds && item.prediction_odds.consensus_pct != null && (
@@ -1354,7 +1378,7 @@ function NewsFeedInner({ selectedEntity, regionDossier, regionDossierLoading, on
 
                                     <div className="flex items-center gap-1.5 mt-1 relative z-10 flex-wrap">
                                         <span className={`text-[8px] font-bold font-mono px-1.5 py-0.5 rounded-sm border ${badgeClass}`}>
-                                            {isBreaking ? 'BREAKING' : `LVL: ${item.risk_score}/10`}
+                                            {isBreaking ? '突发' : `等级: ${item.risk_score}/10`}
                                         </span>
                                         {item.sentiment != null && (
                                             <span className={`text-[8px] font-bold font-mono px-1.5 py-0.5 rounded-sm border ${
@@ -1382,7 +1406,7 @@ function NewsFeedInner({ selectedEntity, regionDossier, regionDossierLoading, on
                                         )}
                                         {item.cluster_count > 1 && (
                                             <button onClick={() => toggleExpand(idx)} className="text-[8px] font-bold font-mono text-cyan-500 bg-[var(--bg-secondary)]/50 hover:text-[var(--text-primary)] hover:bg-[var(--hover-accent)] border border-cyan-500/30 px-1.5 py-0.5 rounded-sm transition-colors cursor-pointer">
-                                                {isExpanded ? '- COLLAPSE' : `+${item.cluster_count - 1} SOURCES`}
+                                                {isExpanded ? '- 收起' : `+${item.cluster_count - 1} 来源`}
                                             </button>
                                         )}
                                         {item.coords && (
@@ -1409,7 +1433,7 @@ function NewsFeedInner({ selectedEntity, regionDossier, regionDossierLoading, on
                                                                     subItem.risk_score >= 7 ? 'text-orange-400' :
                                                                         subItem.risk_score >= 4 ? 'text-yellow-500' :
                                                                             'text-green-400'
-                                                            }>LVL: {subItem.risk_score}/10</span>
+                                                            }>等级: {subItem.risk_score}/10</span>
                                                         </div>
                                                         <a href={subItem.link} target="_blank" rel="noreferrer" className="text-[10px] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors leading-tight">
                                                             {subItem.title}

@@ -193,7 +193,7 @@ function LocateBar({ onLocate, onOpenChange }: { onLocate: (lat: number, lng: nu
           <circle cx="11" cy="11" r="8" />
           <path d="m21 21-4.3-4.3" />
         </svg>
-        LOCATE
+        定位
       </button>
     );
   }
@@ -228,7 +228,7 @@ function LocateBar({ onLocate, onOpenChange }: { onLocate: (lat: number, lng: nu
             }
             if (e.key === 'Enter' && results.length > 0) handleSelect(results[0]);
           }}
-          placeholder="Enter coordinates (31.8, 34.8) or place name..."
+          placeholder="输入坐标（31.8, 34.8）或地点名称..."
           className="flex-1 bg-transparent text-[12px] text-[var(--text-primary)] font-mono tracking-wider outline-none placeholder:text-[var(--text-muted)]"
         />
         {loading && (
@@ -539,6 +539,18 @@ export default function Dashboard() {
   );
 
   const stylesList = ['DEFAULT', 'SATELLITE'];
+  const styleLabelMap: Record<string, string> = {
+    DEFAULT: '默认',
+    SATELLITE: '卫星',
+  };
+  const solarLabelMap: Record<string, string> = {
+    QUIET: '平静',
+    MINOR: '轻度',
+    MODERATE: '中等',
+    STRONG: '强',
+    SEVERE: '严重',
+    EXTREME: '极端',
+  };
 
   const cycleStyle = () => {
     setActiveStyle((prev) => {
@@ -629,7 +641,7 @@ export default function Dashboard() {
                   S H A D O W <span className="text-cyan-400">B R O K E R</span>
                 </h1>
                 <span className="text-[9px] text-[var(--text-muted)] font-mono tracking-[0.3em] mt-1 ml-1">
-                  GLOBAL THREAT INTERCEPT
+                  全球威胁拦截
                 </span>
               </div>
             </motion.div>
@@ -729,7 +741,7 @@ export default function Dashboard() {
                   className="text-[7px] font-mono tracking-[0.2em] font-bold"
                   style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)' }}
                 >
-                  LAYERS
+                  图层
                 </span>
               </button>
             </motion.div>
@@ -749,7 +761,7 @@ export default function Dashboard() {
                   className="text-[7px] font-mono tracking-[0.2em] font-bold"
                   style={{ writingMode: 'vertical-rl' }}
                 >
-                  INTEL
+                  情报
                 </span>
               </button>
             </motion.div>
@@ -843,7 +855,7 @@ export default function Dashboard() {
                   {/* Coordinates */}
                   <div className="flex flex-col items-center min-w-[120px]">
                     <div className="text-[8px] text-[var(--text-muted)] font-mono tracking-[0.2em]">
-                      COORDINATES
+                      坐标
                     </div>
                     <div className="text-[11px] text-cyan-400 font-mono font-bold tracking-wide">
                       {mouseCoords
@@ -858,10 +870,10 @@ export default function Dashboard() {
                   {/* Location name */}
                   <div className="flex flex-col items-center min-w-[160px] max-w-[280px]">
                     <div className="text-[8px] text-[var(--text-muted)] font-mono tracking-[0.2em]">
-                      LOCATION
+                      位置
                     </div>
                     <div className="text-[10px] text-[var(--text-secondary)] font-mono truncate max-w-[280px]">
-                      {locationLabel || 'Hover over map...'}
+                      {locationLabel || '悬停地图查看...'}
                     </div>
                   </div>
 
@@ -871,10 +883,10 @@ export default function Dashboard() {
                   {/* Style preset (compact) */}
                   <div className="flex flex-col items-center">
                     <div className="text-[8px] text-[var(--text-muted)] font-mono tracking-[0.2em]">
-                      STYLE
+                      样式
                     </div>
                     <div className="text-[11px] text-cyan-400 font-mono font-bold">
-                      {activeStyle}
+                      {styleLabelMap[activeStyle] || activeStyle}
                     </div>
                   </div>
 
@@ -890,7 +902,7 @@ export default function Dashboard() {
                         title={`Kp Index: ${sw?.kp_index ?? 'N/A'}`}
                       >
                         <div className="text-[8px] text-[var(--text-muted)] font-mono tracking-[0.2em]">
-                          SOLAR
+                          太阳活动
                         </div>
                         <div
                           className={`text-[11px] font-mono font-bold ${
@@ -901,7 +913,7 @@ export default function Dashboard() {
                                 : 'text-green-400'
                           }`}
                         >
-                          {sw?.kp_text || 'N/A'}
+                          {solarLabelMap[String(sw?.kp_text || '').toUpperCase()] || sw?.kp_text || '未知'}
                         </div>
                       </div>
                     );
@@ -918,7 +930,7 @@ export default function Dashboard() {
             onClick={() => setUiVisible(true)}
             className="absolute bottom-9 right-6 z-[200] bg-[var(--bg-primary)]/80 border border-[var(--border-primary)] px-4 py-2 text-[10px] font-mono tracking-widest text-cyan-500 hover:text-cyan-300 hover:border-cyan-800 transition-colors pointer-events-auto"
           >
-            RESTORE UI
+            恢复界面
           </button>
         )}
 
@@ -990,7 +1002,7 @@ export default function Dashboard() {
               <div className="p-6 space-y-4">
                 <div className="flex items-center justify-between">
                   <h2 className="text-lg font-bold tracking-wider text-purple-300 font-mono">
-                    SENTINEL HUB IMAGERY
+                    Sentinel Hub 卫星影像
                   </h2>
                   <button
                     onClick={() => setShowSentinelInfo(false)}
@@ -1001,18 +1013,18 @@ export default function Dashboard() {
                 </div>
 
                 <p className="text-[11px] text-[var(--text-secondary)] font-mono leading-relaxed">
-                  You now have access to ESA Sentinel-2 satellite imagery directly on the map.
-                  This uses the Copernicus Data Space Ecosystem with your own credentials.
+                  你现在可以直接在地图上使用 ESA Sentinel-2 卫星影像。
+                  该功能通过 Copernicus Data Space Ecosystem，使用你自己的凭据访问。
                 </p>
 
                 <div className="space-y-2">
-                  <h3 className="text-[10px] font-mono text-purple-400 tracking-widest">AVAILABLE LAYERS</h3>
+                  <h3 className="text-[10px] font-mono text-purple-400 tracking-widest">可用图层</h3>
                   <div className="grid grid-cols-2 gap-2">
                     {[
-                      { name: 'True Color', desc: 'Natural RGB — see terrain, cities, water' },
-                      { name: 'False Color IR', desc: 'Near-infrared — vegetation in red' },
-                      { name: 'NDVI', desc: 'Vegetation health index (green = healthy)' },
-                      { name: 'Moisture Index', desc: 'Soil & vegetation moisture levels' },
+                      { name: '真彩色', desc: '自然 RGB，可查看地形、城市与水体' },
+                      { name: '伪彩红外', desc: '近红外显示，植被呈红色' },
+                      { name: 'NDVI', desc: '植被健康指数（绿色越亮越健康）' },
+                      { name: '湿度指数', desc: '土壤与植被含水量' },
                     ].map((l) => (
                       <div key={l.name} className="p-2 border border-purple-900/30 bg-purple-950/10">
                         <div className="text-[10px] font-mono text-white">{l.name}</div>
@@ -1023,35 +1035,35 @@ export default function Dashboard() {
                 </div>
 
                 <div className="space-y-2">
-                  <h3 className="text-[10px] font-mono text-purple-400 tracking-widest">USAGE LIMITS (FREE TIER)</h3>
+                  <h3 className="text-[10px] font-mono text-purple-400 tracking-widest">使用限制（免费层）</h3>
                   <div className="p-3 border border-[var(--border-primary)] bg-[var(--bg-primary)]/40 space-y-1.5">
                     <div className="flex justify-between text-[10px] font-mono">
-                      <span className="text-[var(--text-muted)]">Monthly budget</span>
-                      <span className="text-purple-300">10,000 requests</span>
+                      <span className="text-[var(--text-muted)]">每月预算</span>
+                      <span className="text-purple-300">10,000 次请求</span>
                     </div>
                     <div className="flex justify-between text-[10px] font-mono">
-                      <span className="text-[var(--text-muted)]">Cost per tile</span>
+                      <span className="text-[var(--text-muted)]">单瓦片成本</span>
                       <span className="text-purple-300">0.25 PU (256&times;256px)</span>
                     </div>
                     <div className="flex justify-between text-[10px] font-mono">
-                      <span className="text-[var(--text-muted)]">~Viewport loads/month</span>
-                      <span className="text-purple-300">~500 (20 tiles each)</span>
+                      <span className="text-[var(--text-muted)]">每月视口加载量</span>
+                      <span className="text-purple-300">约 500 次（每次约 20 瓦片）</span>
                     </div>
                     <div className="flex justify-between text-[10px] font-mono">
-                      <span className="text-[var(--text-muted)]">Empty tiles</span>
-                      <span className="text-green-400">FREE (no data = no charge)</span>
+                      <span className="text-[var(--text-muted)]">空瓦片</span>
+                      <span className="text-green-400">免费（无数据不计费）</span>
                     </div>
                   </div>
                 </div>
 
                 <div className="space-y-2">
-                  <h3 className="text-[10px] font-mono text-purple-400 tracking-widest">HOW IT WORKS</h3>
+                  <h3 className="text-[10px] font-mono text-purple-400 tracking-widest">工作原理</h3>
                   <ul className="text-[10px] text-[var(--text-secondary)] font-mono leading-relaxed space-y-1 list-disc list-inside">
-                    <li>Sentinel-2 revisits every ~5 days — not every location has data every day</li>
-                    <li>The date slider picks the end of a time window; zoomed out uses wider windows</li>
-                    <li>Black patches = no satellite pass on that date range (normal)</li>
-                    <li>Best results at zoom 8-14 — closer = sharper imagery (10m resolution)</li>
-                    <li>Cloud filter auto-skips tiles with {'>'} 30% cloud cover</li>
+                    <li>Sentinel-2 约每 5 天重访一次，并非每天每个地点都有数据</li>
+                    <li>日期滑块选择时间窗口结束点；缩小地图时会采用更宽时间窗</li>
+                    <li>黑色区域表示该时段无卫星过境（正常现象）</li>
+                    <li>缩放 8-14 级效果最佳；放大越近影像越清晰（10 米分辨率）</li>
+                    <li>云量过滤会自动跳过云覆盖 {'>'} 30% 的瓦片</li>
                   </ul>
                 </div>
 
@@ -1059,7 +1071,7 @@ export default function Dashboard() {
                   onClick={() => setShowSentinelInfo(false)}
                   className="w-full py-2.5 bg-purple-500/20 border border-purple-500/40 text-purple-300 hover:bg-purple-500/30 transition-colors text-[11px] font-mono tracking-wider"
                 >
-                  GOT IT
+                  知道了
                 </button>
               </div>
             </div>
@@ -1094,8 +1106,7 @@ export default function Dashboard() {
         {backendStatus === 'disconnected' && (
           <div className="absolute top-0 left-0 right-0 z-[9000] flex items-center justify-center py-2 bg-red-950/90 border-b border-red-500/40 backdrop-blur-sm">
             <span className="text-[10px] font-mono tracking-widest text-red-400">
-              BACKEND OFFLINE — Cannot reach backend server. Check that the backend container is
-              running and BACKEND_URL is correct.
+              后端离线——无法连接后端服务。请检查后端容器是否运行，以及 BACKEND_URL 是否正确。
             </span>
           </div>
         )}
@@ -1110,7 +1121,7 @@ export default function Dashboard() {
             className="flex items-center gap-2 px-3 py-1 bg-cyan-950/40 border border-cyan-800/50 border-b-0 rounded-t text-cyan-700 hover:text-cyan-400 hover:bg-cyan-950/60 hover:border-cyan-500/40 transition-colors"
           >
             <div className="text-[7.5px] font-mono tracking-[0.25em] font-bold uppercase">
-              MARKETS
+              市场
             </div>
             {tickerOpen ? <ChevronDown size={10} /> : <ChevronUp size={10} />}
           </button>

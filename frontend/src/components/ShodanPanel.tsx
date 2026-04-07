@@ -502,15 +502,15 @@ export default function ShodanPanel({
         <div className="flex items-center gap-2">
           <Radar size={13} className="text-green-400" />
           <span className="text-[12px] font-mono font-bold tracking-[0.25em] text-green-400">
-            SHODAN CONNECTOR
+            SHODAN 连接器
           </span>
         </div>
         <div className="flex items-center gap-2 text-[12px] font-mono">
           <span className="border border-green-700/40 px-1.5 py-0.5 text-green-300">
-            {currentResults.length.toLocaleString()} MAP
+            {currentResults.length.toLocaleString()} 地图点
           </span>
           <span className="border border-green-700/40 px-1.5 py-0.5 text-green-500/80">
-            LOCAL
+            本地
           </span>
           {isMinimized ? (
             <ChevronUp size={12} className="text-green-500" />

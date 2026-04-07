@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, ChevronDown, ChevronUp } from 'lucide-react';
 import ExternalImage from '@/components/ExternalImage';
+import { lookupStaticZh } from '@/lib/zhStaticDictionary';
 
 // ─── Inline SVG legend icons (small, crisp, no external deps) ───
 const plane = (fill: string, size = 16) =>
@@ -310,6 +311,7 @@ const MapLegend = React.memo(function MapLegend({
   onClose: () => void;
 }) {
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+  const zh = (text: string) => lookupStaticZh(text) || text;
 
   const toggle = (name: string) => {
     setCollapsed((prev) => {
@@ -362,10 +364,10 @@ const MapLegend = React.memo(function MapLegend({
                 </div>
                 <div>
                   <h2 className="text-sm font-bold tracking-[0.2em] text-[var(--text-primary)] font-mono">
-                    MAP LEGEND
+                    地图图例
                   </h2>
                   <span className="text-[9px] text-[var(--text-muted)] font-mono tracking-widest">
-                    ICON REFERENCE KEY
+                    图标说明索引
                   </span>
                 </div>
               </div>
@@ -394,7 +396,7 @@ const MapLegend = React.memo(function MapLegend({
                       <span
                         className={`text-[9px] font-mono tracking-widest font-bold px-2 py-0.5 border ${cat.color}`}
                       >
-                        {cat.name}
+                        {zh(cat.name)}
                       </span>
                       {isCollapsed ? (
                         <ChevronDown size={12} className="text-[var(--text-muted)]" />
@@ -421,7 +423,7 @@ const MapLegend = React.memo(function MapLegend({
                               >
                                 <IconImg svg={item.svg} />
                                 <span className="text-[11px] text-[var(--text-secondary)] font-mono">
-                                  {item.label}
+                                  {zh(item.label)}
                                 </span>
                               </div>
                             ))}
@@ -437,8 +439,8 @@ const MapLegend = React.memo(function MapLegend({
             {/* Footer */}
             <div className="p-3 border-t border-[var(--border-primary)]/80 flex-shrink-0">
               <div className="text-[9px] text-[var(--text-muted)] font-mono text-center tracking-wider">
-                {LEGEND.reduce((sum, c) => sum + c.items.length, 0)} ICON DEFINITIONS ACROSS{' '}
-                {LEGEND.length} CATEGORIES
+                共 {LEGEND.reduce((sum, c) => sum + c.items.length, 0)} 个图标定义，覆盖{' '}
+                {LEGEND.length} 个类别
               </div>
             </div>
           </motion.div>

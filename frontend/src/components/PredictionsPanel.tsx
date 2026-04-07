@@ -744,10 +744,10 @@ const PredictionsPanel = React.memo(function PredictionsPanel() {
   const availableRep = profile?.oracle_rep ?? 0;
 
   const tabs: { id: Tab; label: string; icon: typeof TrendingUp }[] = [
-    { id: 'markets', label: 'MARKETS', icon: TrendingUp },
-    { id: 'trending', label: 'TRENDING', icon: Zap },
-    { id: 'active', label: 'ACTIVE', icon: AlertTriangle },
-    { id: 'profile', label: 'PROFILE', icon: User },
+    { id: 'markets', label: '市场', icon: TrendingUp },
+    { id: 'trending', label: '热门', icon: Zap },
+    { id: 'active', label: '活跃', icon: AlertTriangle },
+    { id: 'profile', label: '档案', icon: User },
   ];
 
   return (
@@ -779,7 +779,7 @@ const PredictionsPanel = React.memo(function PredictionsPanel() {
           <div className="flex items-center gap-2">
             <Trophy size={12} className="text-[var(--text-muted)]" />
             <span className="text-[12px] text-[var(--text-muted)] font-mono tracking-widest">
-              ORACLE PREDICTIONS
+              预言机预测
             </span>
             {headerCount > 0 && (
               <span className="text-[8px] bg-emerald-500/15 text-emerald-400 px-1.5 py-0.5 rounded-sm font-mono">
@@ -840,7 +840,7 @@ const PredictionsPanel = React.memo(function PredictionsPanel() {
                           type="text"
                           value={searchQuery}
                           onChange={(e) => handleSearchInput(e.target.value)}
-                          placeholder="SEARCH MARKETS..."
+                          placeholder="搜索市场..."
                           className="w-full pl-6 pr-6 py-1.5 text-[9px] font-mono tracking-wider bg-[var(--bg-primary)]/60 border border-[var(--border-primary)]/50 text-[var(--text-secondary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-emerald-500/50"
                         />
                         {searchQuery && (
@@ -862,12 +862,12 @@ const PredictionsPanel = React.memo(function PredictionsPanel() {
                       <div className="px-3 pb-2 flex flex-col gap-1">
                         <div className="text-[7px] font-mono tracking-widest text-[var(--text-muted)] mb-1">
                           {isSearching
-                            ? 'SEARCHING ALL MARKETS...'
-                            : `${searchResults.length} RESULTS FROM POLYMARKET + KALSHI`}
+                            ? '正在搜索全部市场...'
+                            : `${searchResults.length} 条结果（Polymarket + Kalshi）`}
                         </div>
                         {!isSearching && searchResults.length === 0 && (
                           <div className="text-[8px] text-[var(--text-muted)] font-mono text-center py-3">
-                            NO RESULTS FOR &quot;{searchQuery.toUpperCase()}&quot;
+                            未找到 &quot;{searchQuery.toUpperCase()}&quot; 的结果
                           </div>
                         )}
                         {searchResults.map((m, i) => (
@@ -1057,7 +1057,7 @@ const PredictionsPanel = React.memo(function PredictionsPanel() {
                   <div className="flex flex-col gap-1 p-3">
                     {!nodeId && (
                       <div className="text-[9px] text-[var(--text-muted)] font-mono text-center py-6">
-                        CONNECT WORMHOLE OR GENERATE IDENTITY IN MESH CHAT FIRST
+                        请先连接虫洞或在网状通信中生成身份
                       </div>
                     )}
                     {nodeId && predictions.length === 0 && (
@@ -1107,7 +1107,7 @@ const PredictionsPanel = React.memo(function PredictionsPanel() {
                   <div className="p-3">
                     {!nodeId && (
                       <div className="text-[9px] text-[var(--text-muted)] font-mono text-center py-6">
-                        CONNECT WORMHOLE OR GENERATE IDENTITY IN MESH CHAT FIRST
+                        请先连接虫洞或在网状通信中生成身份
                       </div>
                     )}
                     {nodeId && !profile && (

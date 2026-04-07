@@ -43,9 +43,9 @@ const WorldviewRightPanel = React.memo(function WorldviewRightPanel({
         <div className="absolute -bottom-1 -right-1 w-2 h-2 border-b border-r border-[var(--text-muted)]/50"></div>
         <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
         <div className="text-[10px] font-mono text-[var(--text-secondary)] tracking-wider">
-          REC {currentTime.date} {currentTime.time}
+          记录 {currentTime.date} {currentTime.time}
           <br />
-          ORB: 47696 PASS: DESC-284
+          轨道: 47696 过境: DESC-284
         </div>
       </div>
 
@@ -57,7 +57,7 @@ const WorldviewRightPanel = React.memo(function WorldviewRightPanel({
           onClick={() => setIsMinimized(!isMinimized)}
         >
           <span className="text-[10px] text-[var(--text-muted)] font-mono tracking-widest">
-            DISPLAY CONFIG
+            显示配置
           </span>
           <button className="text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors">
             {isMinimized ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
@@ -87,11 +87,11 @@ const WorldviewRightPanel = React.memo(function WorldviewRightPanel({
                     <span
                       className={`text-xs font-mono tracking-widest ${effects.bloom ? 'text-[var(--text-primary)]' : 'text-[var(--text-muted)]'}`}
                     >
-                      BLOOM
+                      泛光
                     </span>
                   </div>
                   <span className="text-[9px] font-mono tracking-wider text-[var(--text-muted)]">
-                    {effects.bloom ? 'ON' : 'OFF'}
+                    {effects.bloom ? '开' : '关'}
                   </span>
                 </div>
 
@@ -103,7 +103,7 @@ const WorldviewRightPanel = React.memo(function WorldviewRightPanel({
                       <span className="w-1.5 h-1.5 bg-cyan-400 rounded-full"></span>
                     </span>
                     <span className="text-xs font-mono tracking-widest text-cyan-400 font-bold">
-                      SHARPEN
+                      锐化
                     </span>
                   </div>
                   <div className="flex items-center justify-between gap-3 mt-1">
@@ -123,9 +123,9 @@ const WorldviewRightPanel = React.memo(function WorldviewRightPanel({
                   </div>
 
                   <div className="flex items-center justify-between border border-[var(--border-primary)] rounded px-4 py-2 mt-1 bg-[var(--bg-primary)]/50">
-                    <span className="text-[10px] text-[var(--text-muted)] font-mono">LAYOUT</span>
+                    <span className="text-[10px] text-[var(--text-muted)] font-mono">布局</span>
                     <span className="text-xs text-[var(--text-primary)] tracking-widest border-b border-dashed border-[var(--border-secondary)] pb-0.5 cursor-pointer flex items-center gap-2">
-                      Tactical
+                      战术
                     </span>
                   </div>
                 </div>
@@ -134,7 +134,7 @@ const WorldviewRightPanel = React.memo(function WorldviewRightPanel({
                   className="w-full border border-red-900/30 bg-red-950/10 rounded py-3 mt-2 text-[10px] font-mono tracking-widest text-red-500 hover:text-white hover:bg-red-900 hover:border-red-600 transition-all font-bold"
                   onClick={() => setUiVisible(false)}
                 >
-                  CLEAR UI (TACTICAL MODE)
+                  清空界面（战术模式）
                 </button>
               </div>
             </motion.div>
