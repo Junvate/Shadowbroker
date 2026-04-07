@@ -4,5 +4,5 @@
 // This means:
 //   - No build-time baking of the backend URL into the client bundle
 //   - BACKEND_URL=http://backend:8000 works via Docker internal networking
-//   - Only port 6873 needs to be exposed externally
+//   - In local dev, frontend typically runs on port 3000
 export const API_BASE = '';

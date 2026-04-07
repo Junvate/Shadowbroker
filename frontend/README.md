@@ -5,8 +5,12 @@ Next.js 16 dashboard with MapLibre GL, Cesium, and Framer Motion.
 ## Development
 
 ```bash
+# From repo root (recommended)
+npm run dev
+
+# Or from this frontend directory
 npm install
-npm run dev        # http://localhost:3000
+npm run dev        # http://localhost:6789
 ```
 
 ## Auto Chinese Translation
@@ -35,8 +39,8 @@ The frontend needs to reach the backend (default port `8000`). Resolution order:
 
 | Scenario                                        | Action needed                                                   |
 | ----------------------------------------------- | --------------------------------------------------------------- |
-| Local dev (`localhost:3000` + `localhost:8000`) | None — auto-detected                                            |
-| LAN access (`192.168.x.x:3000`)                 | None — auto-detected from browser hostname                      |
+| Local dev (`localhost:6789` + `localhost:8000`) | None — auto-detected                                            |
+| LAN access (`192.168.x.x:6789`)                 | None — auto-detected from browser hostname                      |
 | Public deploy (same host, port 8000)            | None — auto-detected                                            |
 | Backend on different port (e.g. `9096`)         | Set `NEXT_PUBLIC_API_URL=http://host:9096` before build         |
 | Backend on different host                       | Set `NEXT_PUBLIC_API_URL=http://backend-host:8000` before build |

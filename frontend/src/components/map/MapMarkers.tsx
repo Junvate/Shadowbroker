@@ -1,7 +1,208 @@
-import React from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Marker } from 'react-map-gl/maplibre';
 import type { Earthquake, SelectedEntity, Ship, TrackedFlight, UAV } from '@/types/dashboard';
 import type { SpreadAlertItem } from '@/utils/alertSpread';
+import { lookupStaticZh } from '@/lib/zhStaticDictionary';
+
+const THREAT_TRANSLATION_TARGET_LANG = 'ZH-HANS';
+const THREAT_TITLE_TRANSLATION_MIN_LENGTH = 16;
+const THREAT_TITLE_CACHE_KEY = 'sb_threat_title_zh_cache_v1';
+const THREAT_TITLE_CACHE_LIMIT = 5000;
+const threatTitleZhCache = new Map<string, string>();
+let threatTitleStorageHydrated = false;
+
+function shouldTranslateThreatTitle(raw: string): boolean {
+  const text = String(raw || '').trim();
+  if (!text) return false;
+  if (text.length < THREAT_TITLE_TRANSLATION_MIN_LENGTH) return false;
+  if (/[\u4e00-\u9fff]/.test(text)) return false;
+  if (!/[A-Za-z]/.test(text)) return false;
+  if (/^https?:\/\//i.test(text)) return false;
+  return true;
+}
+
+function hasCjk(text: string): boolean {
+  return /[\u4e00-\u9fff]/.test(text);
+}
+
+function hasLatin(text: string): boolean {
+  return /[A-Za-z]/.test(text);
+}
+
+function isMixedZhEn(text: string): boolean {
+  return hasCjk(text) && hasLatin(text);
+}
+
+function setThreatTitleCache(source: string, translated: string): void {
+  if (!source) return;
+  if (threatTitleZhCache.has(source)) {
+    threatTitleZhCache.delete(source);
+  }
+  threatTitleZhCache.set(source, translated);
+  while (threatTitleZhCache.size > THREAT_TITLE_CACHE_LIMIT) {
+    const first = threatTitleZhCache.keys().next();
+    if (first.done) break;
+    threatTitleZhCache.delete(first.value);
+  }
+}
+
+function hydrateThreatTitleCacheFromStorage(): void {
+  if (threatTitleStorageHydrated) return;
+  threatTitleStorageHydrated = true;
+  if (typeof window === 'undefined') return;
+  try {
+    const raw = window.localStorage.getItem(THREAT_TITLE_CACHE_KEY);
+    if (!raw) return;
+    const parsed = JSON.parse(raw) as Record<string, string>;
+    const entries = Object.entries(parsed);
+    for (const [k, v] of entries) {
+      if (!k) continue;
+      setThreatTitleCache(k, String(v || ''));
+    }
+  } catch {
+    // ignore malformed cache payloads
+  }
+}
+
+function persistThreatTitleCacheToStorage(): void {
+  if (typeof window === 'undefined') return;
+  try {
+    const entries = Array.from(threatTitleZhCache.entries()).slice(-THREAT_TITLE_CACHE_LIMIT);
+    window.localStorage.setItem(THREAT_TITLE_CACHE_KEY, JSON.stringify(Object.fromEntries(entries)));
+  } catch {
+    // ignore storage quota and private mode failures
+  }
+}
+
+function pickStaticTitleFallback(source: string): string | null {
+  const staticZh = lookupStaticZh(source);
+  if (!staticZh || staticZh === source) return null;
+  // Avoid word-by-word mixed output for long headlines.
+  if (shouldTranslateThreatTitle(source) && isMixedZhEn(staticZh)) return null;
+  return staticZh;
+}
+
+function useThreatTitleTranslations(spreadAlerts: SpreadAlertItem[]): Record<string, string> {
+  const [translations, setTranslations] = useState<Record<string, string>>({});
+  const titles = useMemo(
+    () => Array.from(new Set(spreadAlerts.map((item) => String(item.title || '').trim()).filter(Boolean))),
+    [spreadAlerts],
+  );
+
+  useEffect(() => {
+    if (titles.length === 0) return;
+    hydrateThreatTitleCacheFromStorage();
+    let cancelled = false;
+
+    const immediate: Record<string, string> = {};
+    const pending: string[] = [];
+    let cacheDirty = false;
+
+    for (const title of titles) {
+      const cached = threatTitleZhCache.get(title);
+      if (cached != null) {
+        if (shouldTranslateThreatTitle(title) && isMixedZhEn(cached)) {
+          threatTitleZhCache.delete(title);
+          pending.push(title);
+          continue;
+        }
+        if (cached !== title) immediate[title] = cached;
+        continue;
+      }
+
+      if (shouldTranslateThreatTitle(title)) {
+        pending.push(title);
+      } else {
+        const staticFallback = pickStaticTitleFallback(title);
+        const chosen = staticFallback || title;
+        setThreatTitleCache(title, chosen);
+        cacheDirty = true;
+        if (chosen !== title) {
+          immediate[title] = chosen;
+        }
+      }
+    }
+
+    if (Object.keys(immediate).length > 0) {
+      setTranslations((prev) => ({ ...prev, ...immediate }));
+    }
+    if (cacheDirty) {
+      persistThreatTitleCacheToStorage();
+    }
+
+    if (pending.length === 0) return;
+
+    void (async () => {
+      try {
+        const resp = await fetch('/api/translate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            targetLang: THREAT_TRANSLATION_TARGET_LANG,
+            texts: pending,
+          }),
+        });
+        if (!resp.ok) {
+          let dirty = false;
+          pending.forEach((source) => {
+            const fallback = pickStaticTitleFallback(source) || source;
+            setThreatTitleCache(source, fallback);
+            dirty = true;
+          });
+          if (dirty) persistThreatTitleCacheToStorage();
+          return;
+        }
+
+        const data = (await resp.json().catch(() => ({}))) as { translations?: string[] };
+        const translated = Array.isArray(data?.translations) ? data.translations : [];
+        const mapped: Record<string, string> = {};
+        let dirty = false;
+
+        pending.forEach((source, idx) => {
+          const out = String(translated[idx] || '').trim();
+          if (out && out !== source) {
+            setThreatTitleCache(source, out);
+            dirty = true;
+            mapped[source] = out;
+            return;
+          }
+          const fallback = pickStaticTitleFallback(source) || source;
+          setThreatTitleCache(source, fallback);
+          dirty = true;
+          if (fallback !== source) {
+            mapped[source] = fallback;
+          }
+        });
+        if (dirty) persistThreatTitleCacheToStorage();
+
+        if (!cancelled && Object.keys(mapped).length > 0) {
+          setTranslations((prev) => ({ ...prev, ...mapped }));
+        }
+      } catch {
+        let dirty = false;
+        const mapped: Record<string, string> = {};
+        pending.forEach((source) => {
+          const fallback = pickStaticTitleFallback(source) || source;
+          setThreatTitleCache(source, fallback);
+          dirty = true;
+          if (fallback !== source) {
+            mapped[source] = fallback;
+          }
+        });
+        if (dirty) persistThreatTitleCacheToStorage();
+        if (!cancelled && Object.keys(mapped).length > 0) {
+          setTranslations((prev) => ({ ...prev, ...mapped }));
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [titles]);
+
+  return translations;
+}
 
 // Shared monospace label style base
 const LABEL_BASE: React.CSSProperties = {
@@ -313,12 +514,17 @@ export function ThreatMarkers({
   onEntityClick,
   onDismiss,
 }: ThreatMarkerProps) {
+  const translatedThreatTitles = useThreatTitleTranslations(spreadAlerts);
+
   return (
     <>
       {spreadAlerts.map((n) => {
         const count = n.cluster_count || 1;
         const score = n.risk_score || 0;
         const riskColor = getRiskColor(score);
+        const rawTitle = String(n.title || '');
+        const translatedTitle =
+          translatedThreatTitles[rawTitle] || threatTitleZhCache.get(rawTitle) || rawTitle;
         const alertKey = n.alertKey || `${n.title}|${n.coords?.[0]},${n.coords?.[1]}`;
 
         let isVisible = zoom >= 1;
@@ -450,13 +656,13 @@ export function ThreatMarkers({
                     lineHeight: '1.4',
                   }}
                 >
-                  {n.title}
+                  {translatedTitle}
                 </div>
                 {count > 1 && (
                   <div
                     style={{ color: riskColor, opacity: 0.9, fontSize: '10px', marginTop: '4px', letterSpacing: '0.5px' }}
                   >
-                    [+{count - 1} ACTIVE THREATS IN AREA]
+                    [+{count - 1} 区域内活跃威胁]
                   </div>
                 )}
               </div>
