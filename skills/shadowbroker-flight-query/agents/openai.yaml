@@ -1,0 +1,7 @@
+interface:
+  display_name: "Shadowbroker 航班查询"
+  short_description: "使用可复用条件过滤实时航班。"
+  default_prompt: "使用 $shadowbroker-flight-query 拉取实时航班数据，应用可复用过滤条件，并返回带匹配原因的排序证据。"
+
+policy:
+  allow_implicit_invocation: true
