@@ -32,6 +32,31 @@ interface PersistedSettings {
   executeMode: boolean;
 }
 
+interface FlightExecutionRow {
+  idx: number;
+  callsign: string;
+  origin: string;
+  destination: string;
+  altitude: string;
+  speed: string;
+  reason: string;
+}
+
+interface ExecutionSection {
+  title: string;
+  status: string;
+  command: string;
+  notes: string[];
+  flights: FlightExecutionRow[];
+}
+
+interface ParsedExecutionMessage {
+  tasks: number;
+  succeeded: number;
+  failed: number;
+  sections: ExecutionSection[];
+}
+
 function createId(): string {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
     return crypto.randomUUID();
@@ -79,6 +104,74 @@ function makeAssistantMessage(content: string, agentId?: string): AiQaChatMessag
 
 function modeLabel(mode: 'mock' | 'http'): string {
   return mode === 'http' ? '在线接口' : '模拟模式';
+}
+
+function parseFlightExecutionLine(line: string): FlightExecutionRow | null {
+  const match = line.match(
+    /^(\d+)\.\s*(.*?)\s*\|\s*(.*?)\s*->\s*(.*?)\s*\|\s*alt=([^\s]+)\s*speed=([^\s]+)(?:\s*\|\s*(.*))?$/,
+  );
+  if (!match) return null;
+  return {
+    idx: parseInt(match[1], 10),
+    callsign: match[2].trim(),
+    origin: match[3].trim(),
+    destination: match[4].trim(),
+    altitude: match[5].trim(),
+    speed: match[6].trim(),
+    reason: (match[7] || '').trim(),
+  };
+}
+
+function parseExecutionMessage(content: string): ParsedExecutionMessage | null {
+  if (!content.startsWith('执行模式已开启')) return null;
+  const lines = content.split('\n');
+  const summaryLine = lines.find((line) => line.includes('任务数:') && line.includes('成功:'));
+  const summaryMatch = summaryLine?.match(/任务数:\s*(\d+)\s*，\s*成功:\s*(\d+)\s*，\s*失败:\s*(\d+)/);
+  const tasks = summaryMatch ? parseInt(summaryMatch[1], 10) : 0;
+  const succeeded = summaryMatch ? parseInt(summaryMatch[2], 10) : 0;
+  const failed = summaryMatch ? parseInt(summaryMatch[3], 10) : 0;
+
+  const sections: ExecutionSection[] = [];
+  let current: ExecutionSection | null = null;
+
+  for (const rawLine of lines) {
+    const line = rawLine.trim();
+    if (!line) continue;
+    if (line.startsWith('【') && line.endsWith('】')) {
+      if (current) sections.push(current);
+      current = {
+        title: line.slice(1, -1),
+        status: '',
+        command: '',
+        notes: [],
+        flights: [],
+      };
+      continue;
+    }
+    if (!current) continue;
+    if (line.startsWith('状态:')) {
+      current.status = line.replace(/^状态:\s*/, '').trim();
+      continue;
+    }
+    if (line.startsWith('命令:')) {
+      current.command = line.replace(/^命令:\s*/, '').trim();
+      continue;
+    }
+    const parsedFlight = parseFlightExecutionLine(line);
+    if (parsedFlight) {
+      current.flights.push(parsedFlight);
+      continue;
+    }
+    current.notes.push(line);
+  }
+  if (current) sections.push(current);
+
+  return {
+    tasks,
+    succeeded,
+    failed,
+    sections,
+  };
 }
 
 export default function AiQaPanel({ config, context }: AiQaPanelProps) {
@@ -299,7 +392,7 @@ export default function AiQaPanel({ config, context }: AiQaPanelProps) {
       initial={{ y: 20, opacity: 0 }}
       animate={{ y: 0, opacity: 1 }}
       transition={{ duration: 0.35 }}
-      className="w-full bg-[#0a0a0a]/90 backdrop-blur-sm border border-cyan-900/40 pointer-events-auto flex flex-col relative overflow-hidden"
+      className="w-full md:w-[36rem] md:max-w-[calc(100vw-3rem)] md:ml-[-16rem] bg-[#0a0a0a]/90 backdrop-blur-sm border border-cyan-900/40 pointer-events-auto flex flex-col relative overflow-hidden"
     >
       <div
         className="px-3 py-2.5 border-b border-[var(--border-primary)]/50 flex items-center justify-between cursor-pointer hover:bg-[var(--hover-accent)] transition-colors"
@@ -455,7 +548,7 @@ export default function AiQaPanel({ config, context }: AiQaPanelProps) {
 
               <div
                 ref={messagesRef}
-                className="h-[230px] overflow-y-auto styled-scrollbar border border-[var(--border-primary)]/40 bg-[var(--bg-secondary)]/10 p-2 space-y-2"
+                className="h-[300px] overflow-y-auto styled-scrollbar border border-[var(--border-primary)]/40 bg-[var(--bg-secondary)]/10 p-2 space-y-2"
               >
                 {messages.map((msg) => (
                   <div
@@ -483,9 +576,102 @@ export default function AiQaPanel({ config, context }: AiQaPanelProps) {
                           {formatTime(msg.createdAt)}
                         </span>
                       </div>
-                      <pre className="text-[10px] text-[var(--text-primary)] font-mono whitespace-pre-wrap leading-relaxed">
-                        {msg.content}
-                      </pre>
+                      {(() => {
+                        const execution = msg.role === 'assistant' ? parseExecutionMessage(msg.content) : null;
+                        if (!execution) {
+                          return (
+                            <pre className="text-[10px] text-[var(--text-primary)] font-mono whitespace-pre-wrap leading-relaxed">
+                              {msg.content}
+                            </pre>
+                          );
+                        }
+                        return (
+                          <div className="space-y-2">
+                            <div className="grid grid-cols-3 gap-1">
+                              <div className="border border-cyan-500/30 bg-cyan-950/20 px-1.5 py-1 text-[8px] font-mono text-cyan-300">
+                                任务: {execution.tasks}
+                              </div>
+                              <div className="border border-emerald-500/30 bg-emerald-950/20 px-1.5 py-1 text-[8px] font-mono text-emerald-300">
+                                成功: {execution.succeeded}
+                              </div>
+                              <div className="border border-red-500/30 bg-red-950/20 px-1.5 py-1 text-[8px] font-mono text-red-300">
+                                失败: {execution.failed}
+                              </div>
+                            </div>
+
+                            <div className="grid grid-cols-3 gap-1 text-[8px] font-mono">
+                              <div className="border border-[var(--border-primary)]/40 px-1.5 py-1 text-[var(--text-secondary)]">
+                                1. 解析问题
+                              </div>
+                              <div className="border border-[var(--border-primary)]/40 px-1.5 py-1 text-[var(--text-secondary)]">
+                                2. 匹配技能
+                              </div>
+                              <div className="border border-[var(--border-primary)]/40 px-1.5 py-1 text-[var(--text-secondary)]">
+                                3. 执行并汇总
+                              </div>
+                            </div>
+
+                            {execution.sections.map((section, sectionIdx) => (
+                              <div
+                                key={`${section.title}-${sectionIdx}`}
+                                className="border border-[var(--border-primary)]/50 bg-[var(--bg-secondary)]/20 p-2 space-y-1.5"
+                              >
+                                <div className="flex items-center justify-between gap-2">
+                                  <span className="text-[9px] font-mono text-[var(--text-primary)]">
+                                    {section.title}
+                                  </span>
+                                  <span className="text-[8px] font-mono text-emerald-300 border border-emerald-500/30 bg-emerald-950/20 px-1 py-0.5">
+                                    {section.status || '完成'}
+                                  </span>
+                                </div>
+
+                                {section.command && (
+                                  <div className="text-[8px] text-[var(--text-muted)] font-mono break-all border border-[var(--border-primary)]/30 bg-[var(--bg-primary)]/30 px-1.5 py-1">
+                                    {section.command}
+                                  </div>
+                                )}
+
+                                {section.flights.length > 0 && (
+                                  <div className="overflow-x-auto border border-[var(--border-primary)]/30">
+                                    <table className="min-w-full text-[8px] font-mono">
+                                      <thead className="bg-[var(--bg-primary)]/60 text-[var(--text-secondary)]">
+                                        <tr>
+                                          <th className="text-left px-1.5 py-1">#</th>
+                                          <th className="text-left px-1.5 py-1">航班</th>
+                                          <th className="text-left px-1.5 py-1">航线</th>
+                                          <th className="text-left px-1.5 py-1">高度</th>
+                                          <th className="text-left px-1.5 py-1">速度</th>
+                                          <th className="text-left px-1.5 py-1">命中</th>
+                                        </tr>
+                                      </thead>
+                                      <tbody>
+                                        {section.flights.map((row) => (
+                                          <tr key={`${section.title}-${row.idx}`} className="border-t border-[var(--border-primary)]/20">
+                                            <td className="px-1.5 py-1 text-[var(--text-muted)]">{row.idx}</td>
+                                            <td className="px-1.5 py-1 text-[var(--text-primary)]">{row.callsign}</td>
+                                            <td className="px-1.5 py-1 text-[var(--text-secondary)] whitespace-nowrap">
+                                              {row.origin} → {row.destination}
+                                            </td>
+                                            <td className="px-1.5 py-1 text-[var(--text-primary)]">{row.altitude}</td>
+                                            <td className="px-1.5 py-1 text-[var(--text-primary)]">{row.speed}</td>
+                                            <td className="px-1.5 py-1 text-[var(--text-muted)]">{row.reason || '-'}</td>
+                                          </tr>
+                                        ))}
+                                      </tbody>
+                                    </table>
+                                  </div>
+                                )}
+
+                                {section.notes.length > 0 && (
+                                  <pre className="text-[8px] text-[var(--text-secondary)] font-mono whitespace-pre-wrap leading-relaxed">
+                                    {section.notes.join('\n')}
+                                  </pre>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        );
+                      })()}
                       {msg.traceId && (
                         <div className="text-[7px] text-[var(--text-muted)] font-mono mt-1">
                           追踪: {msg.traceId}
