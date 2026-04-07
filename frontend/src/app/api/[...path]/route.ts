@@ -178,7 +178,7 @@ function collectFlightDestinationKeywords(userInput: string): string[] {
   const toMatch = lowered.match(/\bto\s+([a-zA-Z][a-zA-Z0-9_-]{1,20})\b/);
   if (toMatch?.[1]) add(toMatch[1]);
 
-  const cnMatch = userInput.match(/飞往\s*([^\s，。,；;！？!?]+)/);
+  const cnMatch = userInput.match(/(?:飞往|前往|去往|去|到)\s*([^\s，。,；;！？!?]+)/);
   if (cnMatch?.[1]) {
     const token = cnMatch[1].trim();
     if (token.includes('日本')) add('japan');
@@ -193,9 +193,15 @@ function buildExecutionPlans(userInput: string, repoRoot: string, backendBaseUrl
   const plans: ScriptExecutionPlan[] = [];
   const lowered = userInput.toLowerCase();
 
+  const hasFlightKeyword =
+    /航班|飞机|flight|flights|aircraft|plane|planes|callsign|icao24/.test(lowered);
+  const hasTravelIntent = /飞往|前往|去往|去|到/.test(userInput);
+  const hasFlightLocationHint =
+    /日本|东京|大阪|札幌|福冈|冲绳|名古屋|japan|tokyo|osaka|narita|haneda/.test(lowered);
   const flightHint =
     lowered.includes('$shadowbroker-flight-query') ||
-    /航班|flight|flights|callsign|icao24/.test(lowered);
+    hasFlightKeyword ||
+    (hasTravelIntent && hasFlightLocationHint);
   if (flightHint) {
     const scriptPath = path.join(
       repoRoot,
