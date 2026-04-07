@@ -26,10 +26,10 @@ interface AiQaPanelProps {
 }
 
 interface PersistedSettings {
-  selectedAgentId: string;
   includeHistory: boolean;
   temperature: number;
   maxTokens: number;
+  executeMode: boolean;
 }
 
 function createId(): string {
@@ -102,10 +102,10 @@ export default function AiQaPanel({ config, context }: AiQaPanelProps) {
   const [messages, setMessages] = useState<AiQaChatMessage[]>([
     makeAssistantMessage(resolvedConfig.welcomeMessage, defaultAgent?.id),
   ]);
-  const [selectedAgentId, setSelectedAgentId] = useState(defaultAgent?.id || resolvedConfig.defaultAgentId);
   const [includeHistory, setIncludeHistory] = useState(resolvedConfig.transport.includeHistoryByDefault);
   const [temperature, setTemperature] = useState(defaultAgent?.defaultTemperature ?? 0.25);
   const [maxTokens, setMaxTokens] = useState(defaultAgent?.defaultMaxTokens ?? 420);
+  const [executeMode, setExecuteMode] = useState(true);
 
   const hydratedRef = useRef(false);
   const messagesRef = useRef<HTMLDivElement | null>(null);
@@ -114,10 +114,7 @@ export default function AiQaPanel({ config, context }: AiQaPanelProps) {
   const storageSettingKey = `${resolvedConfig.storageKey}:settings`;
   const storagePanelKey = `${resolvedConfig.storageKey}:panel`;
 
-  const selectedAgent = useMemo(
-    () => resolvedConfig.agents.find((agent) => agent.id === selectedAgentId) || defaultAgent,
-    [resolvedConfig.agents, selectedAgentId, defaultAgent],
-  );
+  const selectedAgent = defaultAgent;
 
   useEffect(() => {
     try {
@@ -135,9 +132,6 @@ export default function AiQaPanel({ config, context }: AiQaPanelProps) {
       const rawSettings = window.localStorage.getItem(storageSettingKey);
       if (rawSettings) {
         const parsed = JSON.parse(rawSettings) as Partial<PersistedSettings>;
-        if (typeof parsed.selectedAgentId === 'string' && parsed.selectedAgentId) {
-          setSelectedAgentId(parsed.selectedAgentId);
-        }
         if (typeof parsed.includeHistory === 'boolean') {
           setIncludeHistory(parsed.includeHistory);
         }
@@ -146,6 +140,9 @@ export default function AiQaPanel({ config, context }: AiQaPanelProps) {
         }
         if (typeof parsed.maxTokens === 'number' && Number.isFinite(parsed.maxTokens)) {
           setMaxTokens(Math.max(64, Math.min(4096, Math.round(parsed.maxTokens))));
+        }
+        if (typeof parsed.executeMode === 'boolean') {
+          setExecuteMode(parsed.executeMode);
         }
       }
     } catch {
@@ -181,13 +178,13 @@ export default function AiQaPanel({ config, context }: AiQaPanelProps) {
   useEffect(() => {
     if (!hydratedRef.current) return;
     const settings: PersistedSettings = {
-      selectedAgentId,
       includeHistory,
       temperature,
       maxTokens,
+      executeMode,
     };
     window.localStorage.setItem(storageSettingKey, JSON.stringify(settings));
-  }, [includeHistory, maxTokens, selectedAgentId, storageSettingKey, temperature]);
+  }, [executeMode, includeHistory, maxTokens, storageSettingKey, temperature]);
 
   useEffect(() => {
     if (!hydratedRef.current) return;
@@ -246,6 +243,7 @@ export default function AiQaPanel({ config, context }: AiQaPanelProps) {
             includeHistory,
             temperature,
             maxTokens,
+            executeMode,
           },
           metadata: context,
         });
@@ -286,6 +284,7 @@ export default function AiQaPanel({ config, context }: AiQaPanelProps) {
       resolvedConfig,
       selectedAgent,
       temperature,
+      executeMode,
     ],
   );
 
@@ -341,25 +340,9 @@ export default function AiQaPanel({ config, context }: AiQaPanelProps) {
           >
             <div className="p-3 flex flex-col gap-3">
               <div className="flex items-center gap-2">
-                <select
-                  value={selectedAgent?.id || ''}
-                  onChange={(e) => {
-                    const nextId = e.target.value;
-                    setSelectedAgentId(nextId);
-                    const nextAgent = resolvedConfig.agents.find((agent) => agent.id === nextId);
-                    if (nextAgent) {
-                      setTemperature(nextAgent.defaultTemperature ?? 0.25);
-                      setMaxTokens(nextAgent.defaultMaxTokens ?? 420);
-                    }
-                  }}
-                  className="flex-1 bg-[var(--bg-secondary)] border border-[var(--border-primary)] text-[10px] font-mono text-[var(--text-primary)] px-2 py-1.5 outline-none focus:border-cyan-400/60"
-                >
-                  {resolvedConfig.agents.map((agent) => (
-                    <option key={agent.id} value={agent.id}>
-                      {agent.label}
-                    </option>
-                  ))}
-                </select>
+                <div className="flex-1 bg-[var(--bg-secondary)] border border-[var(--border-primary)] text-[10px] font-mono text-[var(--text-primary)] px-2 py-1.5">
+                  {selectedAgent?.label || 'AI 助手'}
+                </div>
                 <button
                   onClick={() => setShowAdvanced((prev) => !prev)}
                   className="px-2 py-1.5 border border-[var(--border-primary)] text-[9px] font-mono text-[var(--text-muted)] hover:text-cyan-300 hover:border-cyan-500/50 transition-colors"
@@ -434,6 +417,20 @@ export default function AiQaPanel({ config, context }: AiQaPanelProps) {
                           className="accent-cyan-500"
                         />
                       </label>
+                      <label className="flex items-center justify-between text-[9px] font-mono text-[var(--text-secondary)]">
+                        <span>可执行模式（运行技能脚本）</span>
+                        <input
+                          type="checkbox"
+                          checked={executeMode}
+                          onChange={(e) => setExecuteMode(e.target.checked)}
+                          className="accent-cyan-500"
+                        />
+                      </label>
+                      {executeMode && (
+                        <div className="text-[8px] font-mono text-emerald-300 border border-emerald-500/30 bg-emerald-950/20 px-2 py-1.5">
+                          严格执行模式：只返回真实脚本执行结果，不回退到模拟回答。
+                        </div>
+                      )}
                     </div>
                   </motion.div>
                 )}
@@ -444,6 +441,7 @@ export default function AiQaPanel({ config, context }: AiQaPanelProps) {
                   <button
                     key={prompt}
                     onClick={() => {
+                      setExecuteMode(true);
                       setInput(prompt);
                       void submitPrompt(prompt);
                     }}
@@ -479,9 +477,7 @@ export default function AiQaPanel({ config, context }: AiQaPanelProps) {
                         >
                           {msg.role === 'user'
                             ? '你'
-                            : resolvedConfig.agents.find((agent) => agent.id === msg.agentId)?.label
-                              || msg.agentId
-                              || '助手'}
+                            : selectedAgent?.label || 'AI 助手'}
                         </span>
                         <span className="text-[7px] text-[var(--text-muted)] font-mono">
                           {formatTime(msg.createdAt)}

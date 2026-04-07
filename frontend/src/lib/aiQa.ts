@@ -37,6 +37,7 @@ export interface AiQaRequestPayload {
     temperature: number;
     maxTokens: number;
     includeHistory: boolean;
+    executeMode?: boolean;
   };
   metadata?: Record<string, unknown>;
 }
@@ -72,50 +73,33 @@ export type AiQaConfigOverrides = Partial<
 
 const DEFAULT_AGENTS: AiQaAgentConfig[] = [
   {
-    id: 'sentinel-ops',
-    label: '哨兵作战助手',
-    description: '偏战术态势与告警分析，适合快速研判',
+    id: 'shadowbroker-ai',
+    label: 'AI 助手',
+    description: '通用情报问答与行动建议',
     systemPrompt:
-      'You are Sentinel Ops. Respond with concise tactical intelligence and concrete actions.',
+      '你是 Shadowbroker AI 助手。请使用中文给出简洁、准确、可执行的分析与建议。',
     defaultTemperature: 0.25,
-    defaultMaxTokens: 420,
-  },
-  {
-    id: 'mesh-analyst',
-    label: 'Mesh 网络分析师',
-    description: '偏 Mesh / Wormhole / Agent 任务编排',
-    systemPrompt:
-      'You are Mesh Analyst. Focus on mesh-network operations, trust boundaries, and task routing.',
-    defaultTemperature: 0.2,
     defaultMaxTokens: 520,
-  },
-  {
-    id: 'briefing-copilot',
-    label: '简报副驾',
-    description: '偏简报生成，输出结构化结论',
-    systemPrompt:
-      'You are Briefing Copilot. Produce structured briefings with summary, risks, and next steps.',
-    defaultTemperature: 0.35,
-    defaultMaxTokens: 600,
   },
 ];
 
 export const DEFAULT_AI_QA_CONFIG: AiQaPanelConfig = {
   title: 'AI 问答',
-  subtitle: '可接入 Agent 控制台',
+  subtitle: '情报分析与问答',
   welcomeMessage:
-    'AI 问答模块已就绪。当前是前端壳体（可先用模拟模式），你后续可直接接入系统 Agent。',
+    'AI 问答模块已就绪。已接入本地技能上下文（flight-query / osint-query）。建议开启可执行模式，仅返回真实执行结果。',
   placeholder: '输入问题、任务指令或情报分析请求...',
   sendButtonLabel: '发送',
   storageKey: 'sb_ai_qa_v1',
   maxMessages: 48,
   quickPrompts: [
-    '总结当前威胁态势并给出 3 条行动建议',
-    '基于地图选中目标，给我一份 60 秒简报',
-    '把这个任务拆分为可执行的 agent 子任务',
-    '输出一份可复制到工单系统的行动清单',
+    '使用 $shadowbroker-osint-query，读取 /api/live-data/fast，给我 flights/ships/sigint 的关键概览与字段样例。',
+    '使用 $shadowbroker-flight-query，按目的地关键词 tokyo 查询航班，返回前 20 条并按 match_score 排序。',
+    '检查 backend/data 的核心数据集可用性，列出缺失文件和异常字段。',
+    '读取 /api/health 与 /api/live-data/fast，输出当前系统健康状态和告警项。',
+    '基于当前地图上下文，生成 60 秒行动简报（结论/风险/下一步）。',
   ],
-  defaultAgentId: 'sentinel-ops',
+  defaultAgentId: 'shadowbroker-ai',
   agents: DEFAULT_AGENTS,
   transport: {
     mode: 'http',
