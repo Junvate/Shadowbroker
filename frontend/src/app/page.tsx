@@ -18,6 +18,7 @@ import ScaleBar from '@/components/ScaleBar';
 import MeshTerminal from '@/components/MeshTerminal';
 import MeshChat from '@/components/MeshChat';
 import InfonetTerminal from '@/components/InfonetTerminal';
+import AiQaPanel from '@/components/AiQaPanel';
 import { leaveWormhole, fetchWormholeState } from '@/mesh/wormholeClient';
 import ShodanPanel from '@/components/ShodanPanel';
 import GlobalTicker from '@/components/GlobalTicker';
@@ -526,6 +527,13 @@ export default function Dashboard() {
     [effects, activeStyle],
   );
 
+  const [activeFilters, setActiveFilters] = useState<Record<string, string[]>>({});
+  const [flyToLocation, setFlyToLocation] = useState<{
+    lat: number;
+    lng: number;
+    ts: number;
+  } | null>(null);
+
   const handleFlyTo = useCallback(
     (lat: number, lng: number) => setFlyToLocation({ lat, lng, ts: Date.now() }),
     [],
@@ -561,13 +569,6 @@ export default function Dashboard() {
       return next;
     });
   };
-
-  const [activeFilters, setActiveFilters] = useState<Record<string, string[]>>({});
-  const [flyToLocation, setFlyToLocation] = useState<{
-    lat: number;
-    lng: number;
-    ts: number;
-  } | null>(null);
 
   // Eavesdrop Mode State
   const [isEavesdropping] = useState(false);
@@ -796,6 +797,19 @@ export default function Dashboard() {
                     });
                   }}
                 />
+              </div>
+
+              {/* AI Q&A */}
+              <div className={`flex-shrink-0 ${rightFocusedPanel && rightFocusedPanel !== 'ai_qa' ? 'hidden' : ''}`}>
+                <ErrorBoundary name="AiQaPanel">
+                  <AiQaPanel
+                    context={{
+                      selectedEntityType: selectedEntity?.type || null,
+                      selectedEntityName: selectedEntity?.name || null,
+                      mapView,
+                    }}
+                  />
+                </ErrorBoundary>
               </div>
 
               {/* GLOBAL TICKER REPLACES MARKETS PANEL - RENDERED OUTSIDE THIS DIV */}
