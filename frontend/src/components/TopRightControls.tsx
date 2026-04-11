@@ -7,8 +7,6 @@ import {
   CheckCircle2,
   RefreshCw,
   X,
-  Terminal,
-  Server,
 } from 'lucide-react';
 import { controlPlaneFetch } from '@/lib/controlPlane';
 import {
@@ -36,7 +34,7 @@ interface TopRightControlsProps {
 export default function TopRightControls({
   onTerminalToggle,
   onInfonetToggle,
-  dmCount,
+  dmCount: _dmCount,
 }: TopRightControlsProps = {}) {
   const { uiLanguage, setUiLanguage } = useTheme();
   const [launcherOpen, setLauncherOpen] = useState(false);
@@ -321,23 +319,6 @@ export default function TopRightControls({
               ? 'SYNC ISSUE'
               : 'ACTIVE';
   const bootstrapFailed = Boolean(nodeStatus?.bootstrap?.last_bootstrap_error);
-  const nodeIndicatorClass =
-    !nodeEnabled
-      ? 'bg-rose-400'
-      : syncError === 'no active sync peers'
-        ? 'bg-cyan-400'
-      : syncOutcomeRaw === 'ok'
-      ? 'bg-green-400'
-      : syncOutcomeRaw === 'fork' || bootstrapFailed
-        ? 'bg-amber-400'
-      : syncOutcomeRaw === 'error'
-          ? 'bg-rose-400'
-          : 'bg-cyan-400';
-  const nodeTitle = !nodeEnabled
-    ? `${nodeMode} node • off`
-    : bootstrapFailed
-      ? `${nodeMode} node • bootstrap warning`
-      : `${nodeMode} node • ${syncOutcome.toLowerCase()}`;
   const closeLauncher = () => {
     stopActivatingPolls();
     setLauncherOpen(false);
@@ -695,21 +676,6 @@ export default function TopRightControls({
     {terminalLauncherModal}
     {nodeLauncherModal}
     <div className="relative flex items-center gap-1.5 mb-1 justify-end">
-      {/* Terminal toggle */}
-      <button
-        onClick={() => void openTerminalLauncher()}
-        className={`relative ${btnBase}`}
-        title="Mesh Terminal"
-      >
-        <Terminal size={11} className="text-cyan-400" />
-        <span className="tracking-wider">TERMINAL</span>
-        {(dmCount ?? 0) > 0 && (
-          <span className="absolute -top-1.5 -right-1.5 bg-red-500 text-white text-[7px] font-bold rounded-full min-w-[14px] h-[14px] flex items-center justify-center px-0.5 shadow-[0_0_6px_rgba(239,68,68,0.5)]">
-            {(dmCount ?? 0) > 9 ? '9+' : dmCount}
-          </span>
-        )}
-      </button>
-
       {/* Discussions link */}
       <a
         href="https://github.com/BigBodyCobain/Shadowbroker/discussions"
@@ -720,33 +686,6 @@ export default function TopRightControls({
         <MessageSquare size={11} className="text-cyan-400" />
         <span className="tracking-wider">DISCUSS</span>
       </a>
-
-      {/* Node runtime / private lane */}
-      <button
-        type="button"
-        onClick={() => {
-          setNodeStep(nodeEnabled ? 'disable' : 'prompt');
-          setNodeToggleError('');
-          setLauncherOpen(true);
-        }}
-        className={`relative ${btnBase}`}
-        title={nodeTitle}
-      >
-        <Server size={11} className="text-cyan-400" />
-        <span className="tracking-wider">NODE</span>
-        <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${nodeIndicatorClass}`} />
-      </button>
-
-      {/* Terminal toggle (secondary position) */}
-      <button
-        type="button"
-        onClick={() => void openTerminalLauncher()}
-        className={`relative ${btnBase}`}
-        title="Open Mesh Terminal"
-      >
-        <Terminal size={11} className="text-cyan-400" />
-        <span className="tracking-wider">TERMINAL</span>
-      </button>
 
       <div
         className={`${btnBase} min-w-[100px] gap-0 px-1`}
