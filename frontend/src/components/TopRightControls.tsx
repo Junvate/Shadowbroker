@@ -3,7 +3,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import {
-  MessageSquare,
   CheckCircle2,
   RefreshCw,
   X,
@@ -676,17 +675,6 @@ export default function TopRightControls({
     {terminalLauncherModal}
     {nodeLauncherModal}
     <div className="relative flex items-center gap-1.5 mb-1 justify-end">
-      {/* Discussions link */}
-      <a
-        href="https://github.com/BigBodyCobain/Shadowbroker/discussions"
-        target="_blank"
-        rel="noreferrer"
-        className={btnBase}
-      >
-        <MessageSquare size={11} className="text-cyan-400" />
-        <span className="tracking-wider">DISCUSS</span>
-      </a>
-
       <div
         className={`${btnBase} min-w-[100px] gap-0 px-1`}
         data-no-auto-zh
