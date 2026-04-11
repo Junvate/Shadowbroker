@@ -13,7 +13,6 @@ import FindLocateBar from '@/components/FindLocateBar';
 import TopRightControls from '@/components/TopRightControls';
 import PredictionsPanel from '@/components/PredictionsPanel';
 import SettingsPanel from '@/components/SettingsPanel';
-import MapLegend from '@/components/MapLegend';
 import ScaleBar from '@/components/ScaleBar';
 import MeshTerminal from '@/components/MeshTerminal';
 import MeshChat from '@/components/MeshChat';
@@ -331,7 +330,6 @@ export default function Dashboard() {
     localStorage.setItem('sb_ticker_open', tickerOpen.toString());
   }, [tickerOpen]);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [legendOpen, setLegendOpen] = useState(false);
   const [terminalOpen, setTerminalOpen] = useState(false);
   const [terminalLaunchToken, setTerminalLaunchToken] = useState(0);
   const [infonetOpen, setInfonetOpen] = useState(false);
@@ -664,7 +662,6 @@ export default function Dashboard() {
                     setActiveLayers={setActiveLayers}
                     shodanResultCount={shodanResults.length}
                     onSettingsClick={() => setSettingsOpen(true)}
-                    onLegendClick={() => setLegendOpen(true)}
                     gibsDate={gibsDate}
                     setGibsDate={setGibsDate}
                     gibsOpacity={gibsOpacity}
@@ -731,7 +728,7 @@ export default function Dashboard() {
                 {leftOpen ? <ChevronLeft size={10} /> : <ChevronRight size={10} />}
                 <span
                   className="text-[7px] font-mono tracking-[0.2em] font-bold"
-                  style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)' }}
+                  style={{ writingMode: 'vertical-rl' }}
                 >
                   图层
                 </span>
@@ -973,11 +970,6 @@ export default function Dashboard() {
         {/* SETTINGS PANEL */}
         <ErrorBoundary name="SettingsPanel">
           <SettingsPanel isOpen={settingsOpen} onClose={() => setSettingsOpen(false)} />
-        </ErrorBoundary>
-
-        {/* MAP LEGEND */}
-        <ErrorBoundary name="MapLegend">
-          <MapLegend isOpen={legendOpen} onClose={() => setLegendOpen(false)} />
         </ErrorBoundary>
 
         {/* ONBOARDING MODAL */}

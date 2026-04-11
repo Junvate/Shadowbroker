@@ -15,9 +15,22 @@ npm run dev        # http://localhost:6789
 
 ## Auto Chinese Translation
 
-The frontend supports full-page automatic Chinese translation via DeepL or NiuTrans.
+The frontend supports full-page automatic Chinese translation via a local OpenAI-compatible model, DeepL, or NiuTrans.
 
-Recommended for quality:
+Recommended when you already host a local model:
+
+```bash
+# edit backend/.env
+# TRANSLATE_PROVIDER=local
+# LOCAL_TRANSLATE_API_URL=http://127.0.0.1:8888/v1/chat/completions
+# LOCAL_TRANSLATE_API_KEY=EMPTY
+# LOCAL_TRANSLATE_MODEL=/data/dify/Qwen3.5-35B-A3B
+# LOCAL_TRANSLATE_MAX_BATCH_SIZE=8
+# LOCAL_TRANSLATE_TIMEOUT_MS=8000
+npm run dev
+```
+
+Recommended cloud API for quality:
 
 ```bash
 # edit backend/.env

@@ -4,7 +4,8 @@ import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, ChevronDown, ChevronUp } from 'lucide-react';
 import ExternalImage from '@/components/ExternalImage';
-import { lookupStaticZh } from '@/lib/zhStaticDictionary';
+import { lookupStaticUiText } from '@/lib/zhStaticDictionary';
+import { useTheme } from '@/lib/ThemeContext';
 
 // ─── Inline SVG legend icons (small, crisp, no external deps) ───
 const plane = (fill: string, size = 16) =>
@@ -310,8 +311,9 @@ const MapLegend = React.memo(function MapLegend({
   isOpen: boolean;
   onClose: () => void;
 }) {
+  const { uiLanguage } = useTheme();
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
-  const zh = (text: string) => lookupStaticZh(text) || text;
+  const zh = (text: string) => lookupStaticUiText(text, uiLanguage) || text;
 
   const toggle = (name: string) => {
     setCollapsed((prev) => {

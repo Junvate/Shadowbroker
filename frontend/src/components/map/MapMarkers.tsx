@@ -2,23 +2,29 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Marker } from 'react-map-gl/maplibre';
 import type { Earthquake, SelectedEntity, Ship, TrackedFlight, UAV } from '@/types/dashboard';
 import type { SpreadAlertItem } from '@/utils/alertSpread';
-import { lookupStaticZh } from '@/lib/zhStaticDictionary';
+import { lookupStaticUiText } from '@/lib/zhStaticDictionary';
+import { useTheme, type UiLanguage } from '@/lib/ThemeContext';
 
-const THREAT_TRANSLATION_TARGET_LANG = 'ZH-HANS';
 const THREAT_TITLE_TRANSLATION_MIN_LENGTH = 16;
-const THREAT_TITLE_CACHE_KEY = 'sb_threat_title_zh_cache_v1';
+const THREAT_TITLE_CACHE_KEY = 'sb_threat_title_ui_cache_v1';
 const THREAT_TITLE_CACHE_LIMIT = 5000;
-const threatTitleZhCache = new Map<string, string>();
+const threatTitleCache = new Map<string, string>();
 let threatTitleStorageHydrated = false;
 
-function shouldTranslateThreatTitle(raw: string): boolean {
+function threatCacheKey(uiLanguage: UiLanguage, source: string): string {
+  return `${uiLanguage}::${source}`;
+}
+
+function targetLangFor(uiLanguage: UiLanguage): string {
+  return uiLanguage === 'zh' ? 'ZH-HANS' : 'EN';
+}
+
+function shouldTranslateThreatTitle(raw: string, uiLanguage: UiLanguage): boolean {
   const text = String(raw || '').trim();
   if (!text) return false;
   if (text.length < THREAT_TITLE_TRANSLATION_MIN_LENGTH) return false;
-  if (/[\u4e00-\u9fff]/.test(text)) return false;
-  if (!/[A-Za-z]/.test(text)) return false;
   if (/^https?:\/\//i.test(text)) return false;
-  return true;
+  return uiLanguage === 'zh' ? /[A-Za-z]/.test(text) : /[\u4e00-\u9fff]/.test(text);
 }
 
 function hasCjk(text: string): boolean {
@@ -33,16 +39,16 @@ function isMixedZhEn(text: string): boolean {
   return hasCjk(text) && hasLatin(text);
 }
 
-function setThreatTitleCache(source: string, translated: string): void {
-  if (!source) return;
-  if (threatTitleZhCache.has(source)) {
-    threatTitleZhCache.delete(source);
+function setThreatTitleCache(cacheKey: string, translated: string): void {
+  if (!cacheKey) return;
+  if (threatTitleCache.has(cacheKey)) {
+    threatTitleCache.delete(cacheKey);
   }
-  threatTitleZhCache.set(source, translated);
-  while (threatTitleZhCache.size > THREAT_TITLE_CACHE_LIMIT) {
-    const first = threatTitleZhCache.keys().next();
+  threatTitleCache.set(cacheKey, translated);
+  while (threatTitleCache.size > THREAT_TITLE_CACHE_LIMIT) {
+    const first = threatTitleCache.keys().next();
     if (first.done) break;
-    threatTitleZhCache.delete(first.value);
+    threatTitleCache.delete(first.value);
   }
 }
 
@@ -67,22 +73,25 @@ function hydrateThreatTitleCacheFromStorage(): void {
 function persistThreatTitleCacheToStorage(): void {
   if (typeof window === 'undefined') return;
   try {
-    const entries = Array.from(threatTitleZhCache.entries()).slice(-THREAT_TITLE_CACHE_LIMIT);
+    const entries = Array.from(threatTitleCache.entries()).slice(-THREAT_TITLE_CACHE_LIMIT);
     window.localStorage.setItem(THREAT_TITLE_CACHE_KEY, JSON.stringify(Object.fromEntries(entries)));
   } catch {
     // ignore storage quota and private mode failures
   }
 }
 
-function pickStaticTitleFallback(source: string): string | null {
-  const staticZh = lookupStaticZh(source);
-  if (!staticZh || staticZh === source) return null;
+function pickStaticTitleFallback(source: string, uiLanguage: UiLanguage): string | null {
+  const staticText = lookupStaticUiText(source, uiLanguage);
+  if (!staticText || staticText === source) return null;
   // Avoid word-by-word mixed output for long headlines.
-  if (shouldTranslateThreatTitle(source) && isMixedZhEn(staticZh)) return null;
-  return staticZh;
+  if (shouldTranslateThreatTitle(source, uiLanguage) && isMixedZhEn(staticText)) return null;
+  return staticText;
 }
 
-function useThreatTitleTranslations(spreadAlerts: SpreadAlertItem[]): Record<string, string> {
+function useThreatTitleTranslations(
+  spreadAlerts: SpreadAlertItem[],
+  uiLanguage: UiLanguage,
+): Record<string, string> {
   const [translations, setTranslations] = useState<Record<string, string>>({});
   const titles = useMemo(
     () => Array.from(new Set(spreadAlerts.map((item) => String(item.title || '').trim()).filter(Boolean))),
@@ -99,10 +108,10 @@ function useThreatTitleTranslations(spreadAlerts: SpreadAlertItem[]): Record<str
     let cacheDirty = false;
 
     for (const title of titles) {
-      const cached = threatTitleZhCache.get(title);
+      const cached = threatTitleCache.get(threatCacheKey(uiLanguage, title));
       if (cached != null) {
-        if (shouldTranslateThreatTitle(title) && isMixedZhEn(cached)) {
-          threatTitleZhCache.delete(title);
+        if (shouldTranslateThreatTitle(title, uiLanguage) && isMixedZhEn(cached)) {
+          threatTitleCache.delete(threatCacheKey(uiLanguage, title));
           pending.push(title);
           continue;
         }
@@ -110,12 +119,12 @@ function useThreatTitleTranslations(spreadAlerts: SpreadAlertItem[]): Record<str
         continue;
       }
 
-      if (shouldTranslateThreatTitle(title)) {
+      if (shouldTranslateThreatTitle(title, uiLanguage)) {
         pending.push(title);
       } else {
-        const staticFallback = pickStaticTitleFallback(title);
+        const staticFallback = pickStaticTitleFallback(title, uiLanguage);
         const chosen = staticFallback || title;
-        setThreatTitleCache(title, chosen);
+        setThreatTitleCache(threatCacheKey(uiLanguage, title), chosen);
         cacheDirty = true;
         if (chosen !== title) {
           immediate[title] = chosen;
@@ -138,15 +147,15 @@ function useThreatTitleTranslations(spreadAlerts: SpreadAlertItem[]): Record<str
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            targetLang: THREAT_TRANSLATION_TARGET_LANG,
+            targetLang: targetLangFor(uiLanguage),
             texts: pending,
           }),
         });
         if (!resp.ok) {
           let dirty = false;
           pending.forEach((source) => {
-            const fallback = pickStaticTitleFallback(source) || source;
-            setThreatTitleCache(source, fallback);
+            const fallback = pickStaticTitleFallback(source, uiLanguage) || source;
+            setThreatTitleCache(threatCacheKey(uiLanguage, source), fallback);
             dirty = true;
           });
           if (dirty) persistThreatTitleCacheToStorage();
@@ -161,13 +170,13 @@ function useThreatTitleTranslations(spreadAlerts: SpreadAlertItem[]): Record<str
         pending.forEach((source, idx) => {
           const out = String(translated[idx] || '').trim();
           if (out && out !== source) {
-            setThreatTitleCache(source, out);
+            setThreatTitleCache(threatCacheKey(uiLanguage, source), out);
             dirty = true;
             mapped[source] = out;
             return;
           }
-          const fallback = pickStaticTitleFallback(source) || source;
-          setThreatTitleCache(source, fallback);
+          const fallback = pickStaticTitleFallback(source, uiLanguage) || source;
+          setThreatTitleCache(threatCacheKey(uiLanguage, source), fallback);
           dirty = true;
           if (fallback !== source) {
             mapped[source] = fallback;
@@ -182,8 +191,8 @@ function useThreatTitleTranslations(spreadAlerts: SpreadAlertItem[]): Record<str
         let dirty = false;
         const mapped: Record<string, string> = {};
         pending.forEach((source) => {
-          const fallback = pickStaticTitleFallback(source) || source;
-          setThreatTitleCache(source, fallback);
+          const fallback = pickStaticTitleFallback(source, uiLanguage) || source;
+          setThreatTitleCache(threatCacheKey(uiLanguage, source), fallback);
           dirty = true;
           if (fallback !== source) {
             mapped[source] = fallback;
@@ -199,7 +208,7 @@ function useThreatTitleTranslations(spreadAlerts: SpreadAlertItem[]): Record<str
     return () => {
       cancelled = true;
     };
-  }, [titles]);
+  }, [titles, uiLanguage]);
 
   return translations;
 }
@@ -514,7 +523,8 @@ export function ThreatMarkers({
   onEntityClick,
   onDismiss,
 }: ThreatMarkerProps) {
-  const translatedThreatTitles = useThreatTitleTranslations(spreadAlerts);
+  const { uiLanguage } = useTheme();
+  const translatedThreatTitles = useThreatTitleTranslations(spreadAlerts, uiLanguage);
 
   return (
     <>
@@ -524,7 +534,9 @@ export function ThreatMarkers({
         const riskColor = getRiskColor(score);
         const rawTitle = String(n.title || '');
         const translatedTitle =
-          translatedThreatTitles[rawTitle] || threatTitleZhCache.get(rawTitle) || rawTitle;
+          translatedThreatTitles[rawTitle] ||
+          threatTitleCache.get(threatCacheKey(uiLanguage, rawTitle)) ||
+          rawTitle;
         const alertKey = n.alertKey || `${n.title}|${n.coords?.[0]},${n.coords?.[1]}`;
 
         let isVisible = zoom >= 1;

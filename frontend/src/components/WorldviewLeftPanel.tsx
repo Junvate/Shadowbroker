@@ -16,7 +16,6 @@ import {
   Settings,
   Sun,
   Moon,
-  BookOpen,
   Radio,
   Play,
   Pause,
@@ -30,7 +29,6 @@ import {
   Zap,
   ToggleLeft,
   ToggleRight,
-  Palette,
   CloudLightning,
   Mountain,
   Wind,
@@ -40,8 +38,7 @@ import {
 } from 'lucide-react';
 import { API_BASE } from '@/lib/api';
 import { onTileLoadingChange, resetTileLoading } from '@/lib/sentinelHub';
-import { lookupStaticZh } from '@/lib/zhStaticDictionary';
-import packageJson from '../../package.json';
+import { lookupStaticUiText } from '@/lib/zhStaticDictionary';
 import { useTheme } from '@/lib/ThemeContext';
 
 function relativeTime(iso: string | undefined): string {
@@ -486,7 +483,6 @@ const WorldviewLeftPanel = React.memo(function WorldviewLeftPanel({
   activeLayers,
   setActiveLayers,
   onSettingsClick,
-  onLegendClick,
   gibsDate,
   setGibsDate,
   gibsOpacity,
@@ -510,7 +506,6 @@ const WorldviewLeftPanel = React.memo(function WorldviewLeftPanel({
   activeLayers: ActiveLayers;
   setActiveLayers: React.Dispatch<React.SetStateAction<ActiveLayers>>;
   onSettingsClick?: () => void;
-  onLegendClick?: () => void;
   gibsDate?: string;
   setGibsDate?: (d: string) => void;
   gibsOpacity?: number;
@@ -539,7 +534,7 @@ const WorldviewLeftPanel = React.memo(function WorldviewLeftPanel({
     setInternalMinimized(newVal);
     onMinimizedChange?.(newVal);
   };
-  const { theme, toggleTheme, hudColor, cycleHudColor } = useTheme();
+  const { theme, uiLanguage } = useTheme();
   const [gibsPlaying, setGibsPlaying] = useState(false);
   const [potusEnabled, setPotusEnabled] = useState(true);
   const gibsIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -1053,20 +1048,6 @@ const WorldviewLeftPanel = React.memo(function WorldviewLeftPanel({
       <div className="mb-6 pointer-events-auto">
         <div className="flex items-center gap-3">
           <h1 className="text-2xl font-bold tracking-[0.2em] text-[var(--text-heading)]">热成像</h1>
-          <button
-            onClick={toggleTheme}
-            className={`w-7 h-7 border border-[var(--border-primary)] hover:border-cyan-500/50 flex items-center justify-center ${theme === 'dark' ? 'text-cyan-400' : 'text-[var(--text-muted)]'} hover:text-cyan-300 transition-all hover:bg-[var(--hover-accent)]`}
-            title={theme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
-          >
-            {theme === 'dark' ? <Sun size={14} /> : <Moon size={14} />}
-          </button>
-          <button
-            onClick={cycleHudColor}
-            className={`w-7 h-7 border border-[var(--border-primary)] hover:border-cyan-500/50 flex items-center justify-center text-cyan-400 hover:text-cyan-300 transition-all hover:bg-[var(--hover-accent)]`}
-            title={hudColor === 'cyan' ? 'Switch to Matrix HUD' : 'Switch to Cyan HUD'}
-          >
-            <Palette size={14} />
-          </button>
           {onSettingsClick && (
             <button
               onClick={onSettingsClick}
@@ -1079,21 +1060,6 @@ const WorldviewLeftPanel = React.memo(function WorldviewLeftPanel({
               />
             </button>
           )}
-          {onLegendClick && (
-            <button
-              onClick={onLegendClick}
-              className={`h-7 px-2 border border-[var(--border-primary)] hover:border-cyan-500/50 flex items-center justify-center gap-1 ${theme === 'dark' ? 'text-cyan-400' : 'text-[var(--text-muted)]'} hover:text-cyan-300 transition-all hover:bg-[var(--hover-accent)]`}
-              title="Map Legend / Icon Key"
-            >
-              <BookOpen size={12} />
-              <span className="text-[8px] font-mono tracking-widest font-bold">图例</span>
-            </button>
-          )}
-          <span
-            className={`h-7 px-2 border border-[var(--border-primary)] flex items-center justify-center text-[8px] ${theme === 'dark' ? 'text-cyan-400' : 'text-[var(--text-muted)]'} font-mono tracking-widest select-none`}
-          >
-            v{packageJson.version}
-          </span>
         </div>
       </div>
 
@@ -1298,7 +1264,7 @@ const WorldviewLeftPanel = React.memo(function WorldviewLeftPanel({
                               section.label === 'SHODAN' ? 'text-green-400' : 'text-[var(--text-muted)]'
                             }`}
                           >
-                            {lookupStaticZh(section.label) || section.label}
+                            {lookupStaticUiText(section.label, uiLanguage) || section.label}
                           </span>
                           {anyOn && totalCount > 0 && (
                             <span
@@ -1335,8 +1301,8 @@ const WorldviewLeftPanel = React.memo(function WorldviewLeftPanel({
                           }}
                           title={
                             allOn
-                              ? `关闭全部 ${lookupStaticZh(section.label) || section.label}`
-                              : `开启全部 ${lookupStaticZh(section.label) || section.label}`
+                              ? `${lookupStaticUiText('Disable', uiLanguage) || 'Disable'} ${lookupStaticUiText(section.label, uiLanguage) || section.label}`
+                              : `${lookupStaticUiText('Enable', uiLanguage) || 'Enable'} ${lookupStaticUiText(section.label, uiLanguage) || section.label}`
                           }
                         >
                           <span
@@ -1402,7 +1368,7 @@ const WorldviewLeftPanel = React.memo(function WorldviewLeftPanel({
                                               : 'text-[var(--text-secondary)]'
                                         } tracking-wide`}
                                       >
-                                        {lookupStaticZh(layer.name) || layer.name}
+                                        {lookupStaticUiText(layer.name, uiLanguage) || layer.name}
                                       </span>
                                       <span className="text-[8px] text-[var(--text-muted)] font-mono tracking-wider mt-0.5">
                                         {layer.id === 'shodan_overlay'

@@ -1,6 +1,9 @@
 const ZH_STATIC_DICTIONARY: Record<string, string> = {
   'WORLDVIEW // ORBITAL TRACKING': '全球态势 // 轨道追踪',
   'Advanced Geopolitical Risk Dashboard': '高级地缘风险仪表盘',
+  'SYSTEM CONFIG': '系统配置',
+  'SETTINGS & DATA SOURCES': '设置与数据源',
+  'OPERATOR TOOLS': '操作员工具',
   LOCATE: '定位',
   'Enter coordinates (31.8, 34.8) or place name...': '输入坐标（31.8, 34.8）或地点名称...',
   Search: '搜索',
@@ -18,6 +21,9 @@ const ZH_STATIC_DICTIONARY: Record<string, string> = {
   Filter: '筛选',
   Map: '地图',
   Layers: '图层',
+  'Data Layers': '数据图层',
+  'Enable all layers': '开启全部图层',
+  'Disable all layers': '关闭全部图层',
   Legend: '图例',
   Status: '状态',
   Refresh: '刷新',
@@ -38,6 +44,7 @@ const ZH_STATIC_DICTIONARY: Record<string, string> = {
   Previous: '上一步',
   Welcome: '欢迎',
   'API Keys': 'API 密钥',
+  'NEWS FEEDS': '新闻源',
   'Free Sources': '免费数据源',
   Minimize: '最小化',
   'Close (Esc)': '关闭（Esc）',
@@ -360,6 +367,59 @@ function applyWordGlossary(input: string): string {
   return out;
 }
 
+const EN_STATIC_DICTIONARY: Record<string, string> = {};
+for (const [en, zh] of Object.entries(ZH_STATIC_DICTIONARY)) {
+  if (!EN_STATIC_DICTIONARY[zh]) {
+    EN_STATIC_DICTIONARY[zh] = en;
+  }
+}
+
+const EN_PHRASE_GLOSSARY: Record<string, string> = {};
+for (const [en, zh] of Object.entries(ZH_PHRASE_GLOSSARY)) {
+  if (!EN_PHRASE_GLOSSARY[zh]) {
+    EN_PHRASE_GLOSSARY[zh] = en;
+  }
+}
+
+const EN_WORD_GLOSSARY: Record<string, string> = {};
+for (const [en, zh] of Object.entries(ZH_WORD_GLOSSARY)) {
+  if (!EN_WORD_GLOSSARY[zh]) {
+    EN_WORD_GLOSSARY[zh] = en;
+  }
+}
+
+function applyEnPhraseGlossary(input: string): string {
+  let out = input;
+  const entries = Object.entries(EN_PHRASE_GLOSSARY).sort((a, b) => b[0].length - a[0].length);
+  for (const [zh, en] of entries) {
+    const re = new RegExp(zh.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g');
+    out = out.replace(re, en);
+  }
+  return out;
+}
+
+function applyEnWordGlossary(input: string): string {
+  let out = input;
+  const entries = Object.entries(EN_WORD_GLOSSARY).sort((a, b) => b[0].length - a[0].length);
+  for (const [zh, en] of entries) {
+    const re = new RegExp(zh.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g');
+    out = out.replace(re, en);
+  }
+  return out;
+}
+
+export function lookupStaticEn(text: string): string | null {
+  const key = normalizeSpaces(text);
+  if (!key) return null;
+  if (EN_STATIC_DICTIONARY[key]) return EN_STATIC_DICTIONARY[key];
+  const phraseTranslated = applyEnPhraseGlossary(key);
+  const wordTranslated = applyEnWordGlossary(phraseTranslated);
+  if (wordTranslated !== key && /[A-Za-z]/.test(wordTranslated)) {
+    return wordTranslated;
+  }
+  return null;
+}
+
 export function lookupStaticZh(text: string): string | null {
   const key = normalizeSpaces(text);
   if (!key) return null;
@@ -374,4 +434,8 @@ export function lookupStaticZh(text: string): string | null {
     return wordTranslated;
   }
   return null;
+}
+
+export function lookupStaticUiText(text: string, uiLanguage: 'zh' | 'en'): string | null {
+  return uiLanguage === 'zh' ? lookupStaticZh(text) : lookupStaticEn(text);
 }
