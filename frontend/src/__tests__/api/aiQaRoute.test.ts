@@ -13,8 +13,8 @@ describe('/api/ai/qa route', () => {
 
   beforeEach(() => {
     process.env.AI_QA_BASE_URL = 'http://llm.test';
-    process.env.AI_QA_MODEL = 'qwen-test';
-    process.env.AI_QA_API_KEY = 'test-key';
+    process.env.AI_QA_MODEL = '';
+    process.env.AI_QA_API_KEY = '';
     process.env.AI_QA_TIMEOUT_MS = '3000';
     vi.restoreAllMocks();
   });
@@ -27,7 +27,7 @@ describe('/api/ai/qa route', () => {
     vi.restoreAllMocks();
   });
 
-  it('forwards requests to the upstream chat completions endpoint with local skill context', async () => {
+  it('forwards requests to the nanobot chat completions endpoint with session isolation', async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       new Response(
         JSON.stringify({
@@ -50,6 +50,7 @@ describe('/api/ai/qa route', () => {
           { role: 'assistant', content: '上一条助手回复' },
         ],
         agent_id: 'mesh-analyst',
+        session_id: 'my-session',
         agent: {
           id: 'mesh-analyst',
           systemPrompt: '请只用中文输出行动建议。',
@@ -75,22 +76,15 @@ describe('/api/ai/qa route', () => {
     const requestInit = fetchMock.mock.calls[0]?.[1] as RequestInit;
     const headers = new Headers(requestInit.headers);
     expect(headers.get('Content-Type')).toBe('application/json');
-    expect(headers.get('Authorization')).toBe('Bearer test-key');
+    expect(headers.get('Authorization')).toBeNull();
 
     const payload = JSON.parse(String(requestInit.body));
-    expect(payload.model).toBe('qwen-test');
-    expect(payload.temperature).toBe(2);
-    expect(payload.max_tokens).toBe(20000);
-    expect(payload.chat_template_kwargs).toEqual({ enable_thinking: false });
-    expect(payload.messages[0]?.role).toBe('system');
-    expect(payload.messages[0]?.content).toContain('请只用中文输出行动建议。');
-    expect(payload.messages[0]?.content).toContain('$shadowbroker-osint-query');
-    expect(payload.messages[0]?.content).toContain('$shadowbroker-flight-query');
-    expect(payload.messages[0]?.content).toContain('快速查询 Shadowbroker API 与后端数据文件');
-    expect(payload.messages[payload.messages.length - 1]).toEqual({
+    expect(payload.model).toBeUndefined();
+    expect(payload.session_id).toBe('my-session');
+    expect(payload.messages).toEqual([{
       role: 'user',
       content: '给我东京方向的实时航班',
-    });
+    }]);
   });
 
   it('rejects empty user messages before calling the upstream model', async () => {
@@ -142,5 +136,70 @@ describe('/api/ai/qa route', () => {
     expect(res.headers.get('cache-control')).toContain('no-store');
     expect(body.error).toBe('上游 AI 请求失败');
     expect(body.detail).toBe('upstream model overloaded');
+  });
+
+  it('falls back to normal chat completion when execute mode does not match any local skill', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          choices: [{ message: { content: '普通对话回退成功' } }],
+        }),
+        {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        },
+      ),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const req = new NextRequest('http://localhost/api/ai/qa', {
+      method: 'POST',
+      body: JSON.stringify({
+        message: 'nihao',
+        session_id: 'fallback-session',
+        options: {
+          executeMode: true,
+        },
+      }),
+      headers: { 'Content-Type': 'application/json' },
+    });
+
+    const res = await proxyPost(req, { params: Promise.resolve({ path: ['ai', 'qa'] }) });
+    const body = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(body.execute_mode).toBeUndefined();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    const payload = JSON.parse(String((fetchMock.mock.calls[0]?.[1] as RequestInit).body));
+    expect(payload.session_id).toBe('fallback-session');
+    expect(payload.messages).toEqual([
+      { role: 'user', content: 'nihao' },
+    ]);
+  });
+
+  it('falls back to local flight skill when the nanobot upstream is unreachable', async () => {
+    const fetchMock = vi.fn().mockRejectedValue(new Error('fetch failed'));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const req = new NextRequest('http://localhost/api/ai/qa', {
+      method: 'POST',
+      body: JSON.stringify({
+        message: '调查一下去日本的飞机',
+        session_id: 'nanobot-down-fallback',
+        options: {
+          includeHistory: true,
+        },
+      }),
+      headers: { 'Content-Type': 'application/json' },
+    });
+
+    const res = await proxyPost(req, { params: Promise.resolve({ path: ['ai', 'qa'] }) });
+    const body = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(body.execute_mode).toBe(true);
+    expect(body.text).toContain('上游 nanobot 当前不可用');
+    expect(body.text).toContain('【航班查询】');
   });
 });

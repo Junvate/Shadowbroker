@@ -15,17 +15,27 @@ npm run dev        # http://localhost:6789
 
 ## Auto Chinese Translation
 
-The frontend now supports full-page automatic Chinese translation via NiuTrans (recommended).
+The frontend supports full-page automatic Chinese translation via DeepL or NiuTrans.
 
-Set API key in backend env before starting dev:
+Recommended for quality:
 
 ```bash
 # edit backend/.env
+# TRANSLATE_PROVIDER=deepl
+# DEEPL_API_KEY=your_deepl_api_key
+npm run dev
+```
+
+Alternative:
+
+```bash
+# edit backend/.env
+# TRANSLATE_PROVIDER=niutrans
 # NIUTRANS_API_KEY=your_niutrans_key
 npm run dev
 ```
 
-If `NIUTRANS_API_KEY` is missing in `backend/.env`, the app still runs but auto-translation will be skipped.
+If neither key is present in `backend/.env`, the app still runs but auto-translation will be skipped.
 
 ## API URL Configuration
 

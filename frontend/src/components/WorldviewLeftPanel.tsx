@@ -1051,12 +1051,6 @@ const WorldviewLeftPanel = React.memo(function WorldviewLeftPanel({
     >
       {/* Header */}
       <div className="mb-6 pointer-events-auto">
-        <div className="text-[10px] text-[var(--text-secondary)] font-mono tracking-widest mb-1">
-          绝密 // SI-TK // NOFORN
-        </div>
-        <div className="text-[10px] text-[var(--text-muted)] font-mono tracking-widest mb-4">
-          KH11-4094 OPS-4168
-        </div>
         <div className="flex items-center gap-3">
           <h1 className="text-2xl font-bold tracking-[0.2em] text-[var(--text-heading)]">热成像</h1>
           <button

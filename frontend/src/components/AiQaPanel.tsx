@@ -29,7 +29,6 @@ interface PersistedSettings {
   includeHistory: boolean;
   temperature: number;
   maxTokens: number;
-  executeMode: boolean;
 }
 
 interface FlightExecutionRow {
@@ -191,14 +190,13 @@ export default function AiQaPanel({ config, context }: AiQaPanelProps) {
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [input, setInput] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [requestError, setRequestError] = useState('');
+  const [sessionId, setSessionId] = useState(() => createId());
   const [messages, setMessages] = useState<AiQaChatMessage[]>([
     makeAssistantMessage(resolvedConfig.welcomeMessage, defaultAgent?.id),
   ]);
   const [includeHistory, setIncludeHistory] = useState(resolvedConfig.transport.includeHistoryByDefault);
   const [temperature, setTemperature] = useState(defaultAgent?.defaultTemperature ?? 0.25);
   const [maxTokens, setMaxTokens] = useState(defaultAgent?.defaultMaxTokens ?? 420);
-  const [executeMode, setExecuteMode] = useState(true);
 
   const hydratedRef = useRef(false);
   const messagesRef = useRef<HTMLDivElement | null>(null);
@@ -206,6 +204,7 @@ export default function AiQaPanel({ config, context }: AiQaPanelProps) {
   const storageMessageKey = `${resolvedConfig.storageKey}:messages`;
   const storageSettingKey = `${resolvedConfig.storageKey}:settings`;
   const storagePanelKey = `${resolvedConfig.storageKey}:panel`;
+  const storageSessionKey = `${resolvedConfig.storageKey}:session`;
 
   const selectedAgent = defaultAgent;
 
@@ -234,9 +233,15 @@ export default function AiQaPanel({ config, context }: AiQaPanelProps) {
         if (typeof parsed.maxTokens === 'number' && Number.isFinite(parsed.maxTokens)) {
           setMaxTokens(Math.max(64, Math.min(4096, Math.round(parsed.maxTokens))));
         }
-        if (typeof parsed.executeMode === 'boolean') {
-          setExecuteMode(parsed.executeMode);
-        }
+      }
+    } catch {
+      /* ignore bad local state */
+    }
+
+    try {
+      const rawSessionId = window.localStorage.getItem(storageSessionKey);
+      if (rawSessionId && rawSessionId.trim()) {
+        setSessionId(rawSessionId.trim());
       }
     } catch {
       /* ignore bad local state */
@@ -258,7 +263,7 @@ export default function AiQaPanel({ config, context }: AiQaPanelProps) {
     }
 
     hydratedRef.current = true;
-  }, [resolvedConfig.maxMessages, storageMessageKey, storagePanelKey, storageSettingKey]);
+  }, [resolvedConfig.maxMessages, storageMessageKey, storagePanelKey, storageSessionKey, storageSettingKey]);
 
   useEffect(() => {
     if (!hydratedRef.current) return;
@@ -274,10 +279,9 @@ export default function AiQaPanel({ config, context }: AiQaPanelProps) {
       includeHistory,
       temperature,
       maxTokens,
-      executeMode,
     };
     window.localStorage.setItem(storageSettingKey, JSON.stringify(settings));
-  }, [executeMode, includeHistory, maxTokens, storageSettingKey, temperature]);
+  }, [includeHistory, maxTokens, storageSettingKey, temperature]);
 
   useEffect(() => {
     if (!hydratedRef.current) return;
@@ -286,6 +290,11 @@ export default function AiQaPanel({ config, context }: AiQaPanelProps) {
       JSON.stringify(trimMessages(messages, resolvedConfig.maxMessages)),
     );
   }, [messages, resolvedConfig.maxMessages, storageMessageKey]);
+
+  useEffect(() => {
+    if (!hydratedRef.current) return;
+    window.localStorage.setItem(storageSessionKey, sessionId);
+  }, [sessionId, storageSessionKey]);
 
   useEffect(() => {
     const el = messagesRef.current;
@@ -324,7 +333,6 @@ export default function AiQaPanel({ config, context }: AiQaPanelProps) {
 
       setMessages((prev) => trimMessages([...prev, userMessage, pendingReply], resolvedConfig.maxMessages));
       setInput('');
-      setRequestError('');
       setIsSubmitting(true);
 
       try {
@@ -332,11 +340,11 @@ export default function AiQaPanel({ config, context }: AiQaPanelProps) {
           message: prompt,
           history,
           agent: selectedAgent,
+          sessionId: includeHistory ? sessionId : `${sessionId}:oneshot:${createId()}`,
           options: {
             includeHistory,
             temperature,
             maxTokens,
-            executeMode,
           },
           metadata: context,
         });
@@ -353,7 +361,6 @@ export default function AiQaPanel({ config, context }: AiQaPanelProps) {
         );
       } catch (error) {
         const message = error instanceof Error ? error.message : 'AI 请求失败，请稍后重试';
-        setRequestError(message);
         setMessages((prev) =>
           prev.map((msg) => {
             if (msg.id !== pendingReply.id) return msg;
@@ -375,16 +382,24 @@ export default function AiQaPanel({ config, context }: AiQaPanelProps) {
       maxTokens,
       messages,
       resolvedConfig,
+      sessionId,
       selectedAgent,
       temperature,
-      executeMode,
     ],
   );
 
   const clearConversation = () => {
+    const nextSessionId = createId();
+    setInput('');
+    setIsSubmitting(false);
+    setSessionId(nextSessionId);
     setMessages([makeAssistantMessage(resolvedConfig.welcomeMessage, selectedAgent?.id)]);
-    setRequestError('');
-    window.localStorage.removeItem(storageMessageKey);
+    try {
+      window.localStorage.removeItem(storageMessageKey);
+      window.localStorage.setItem(storageSessionKey, nextSessionId);
+    } catch {
+      /* ignore storage failures */
+    }
   };
 
   return (
@@ -445,10 +460,11 @@ export default function AiQaPanel({ config, context }: AiQaPanelProps) {
                 </button>
                 <button
                   onClick={clearConversation}
-                  className="px-2 py-1.5 border border-[var(--border-primary)] text-[9px] font-mono text-[var(--text-muted)] hover:text-cyan-300 hover:border-cyan-500/50 transition-colors"
-                  title="清空会话"
+                  className="inline-flex items-center gap-1 px-2 py-1.5 border border-[var(--border-primary)] text-[9px] font-mono text-[var(--text-muted)] hover:text-cyan-300 hover:border-cyan-500/50 transition-colors"
+                  title="清空聊天记录"
                 >
                   <RotateCcw size={12} />
+                  <span>清空记录</span>
                 </button>
               </div>
 
@@ -510,20 +526,9 @@ export default function AiQaPanel({ config, context }: AiQaPanelProps) {
                           className="accent-cyan-500"
                         />
                       </label>
-                      <label className="flex items-center justify-between text-[9px] font-mono text-[var(--text-secondary)]">
-                        <span>可执行模式（运行技能脚本）</span>
-                        <input
-                          type="checkbox"
-                          checked={executeMode}
-                          onChange={(e) => setExecuteMode(e.target.checked)}
-                          className="accent-cyan-500"
-                        />
-                      </label>
-                      {executeMode && (
-                        <div className="text-[8px] font-mono text-emerald-300 border border-emerald-500/30 bg-emerald-950/20 px-2 py-1.5">
-                          严格执行模式：只返回真实脚本执行结果，不回退到模拟回答。
-                        </div>
-                      )}
+                      <div className="text-[8px] font-mono text-emerald-300 border border-emerald-500/30 bg-emerald-950/20 px-2 py-1.5">
+                        默认始终先走 nanobot 对话。模型会根据问题自行决定是否调用本地航班查询技能。
+                      </div>
                     </div>
                   </motion.div>
                 )}
@@ -534,9 +539,7 @@ export default function AiQaPanel({ config, context }: AiQaPanelProps) {
                   <button
                     key={prompt}
                     onClick={() => {
-                      setExecuteMode(true);
                       setInput(prompt);
-                      void submitPrompt(prompt);
                     }}
                     disabled={isSubmitting}
                     className="text-[8px] font-mono text-cyan-300/90 border border-cyan-500/30 bg-cyan-950/20 px-2 py-1 hover:bg-cyan-900/30 hover:border-cyan-400/50 transition-colors disabled:opacity-40"
@@ -626,9 +629,9 @@ export default function AiQaPanel({ config, context }: AiQaPanelProps) {
                                 </div>
 
                                 {section.command && (
-                                  <div className="text-[8px] text-[var(--text-muted)] font-mono break-all border border-[var(--border-primary)]/30 bg-[var(--bg-primary)]/30 px-1.5 py-1">
+                                  <pre className="text-[8px] text-[var(--text-muted)] font-mono whitespace-pre-wrap break-all border border-[var(--border-primary)]/30 bg-[var(--bg-primary)]/30 px-1.5 py-1">
                                     {section.command}
-                                  </div>
+                                  </pre>
                                 )}
 
                                 {section.flights.length > 0 && (
@@ -681,13 +684,6 @@ export default function AiQaPanel({ config, context }: AiQaPanelProps) {
                   </div>
                 ))}
               </div>
-
-              {requestError && (
-                <div className="text-[9px] text-red-400 border border-red-500/40 bg-red-950/20 p-2 font-mono">
-                  {requestError}
-                </div>
-              )}
-
               <div className="space-y-2">
                 <textarea
                   value={input}

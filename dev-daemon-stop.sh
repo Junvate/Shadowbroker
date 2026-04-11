@@ -7,6 +7,7 @@ PID_FILE="$STATE_DIR/dev.pid"
 LOG_FILE="$STATE_DIR/dev.log"
 STARTED_AT_FILE="$STATE_DIR/started_at"
 GRACE_SECONDS="${GRACE_SECONDS:-15}"
+TMUX_SESSION_NAME="${TMUX_SESSION_NAME:-shadowbroker-dev}"
 
 usage() {
   cat <<'EOF'
@@ -15,11 +16,29 @@ Usage:
 
 Environment:
   GRACE_SECONDS  Seconds to wait before force-kill (default: 15)
+  TMUX_SESSION_NAME  tmux session name used for the dev daemon (default: shadowbroker-dev)
 EOF
 }
 
 if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
   usage
+  exit 0
+fi
+
+has_tmux_session() {
+  local session_name="$1"
+  tmux has-session -t "$session_name" 2>/dev/null
+}
+
+if command -v tmux >/dev/null 2>&1 && has_tmux_session "$TMUX_SESSION_NAME"; then
+  echo "[dev-daemon] Stopping tmux session $TMUX_SESSION_NAME ..."
+  tmux kill-session -t "$TMUX_SESSION_NAME" 2>/dev/null || true
+  rm -f "$PID_FILE"
+  rm -f "$STARTED_AT_FILE"
+  echo "[dev-daemon] Stopped."
+  if [[ -f "$LOG_FILE" ]]; then
+    echo "[dev-daemon] Logs kept at: $LOG_FILE"
+  fi
   exit 0
 fi
 

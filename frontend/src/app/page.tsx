@@ -636,27 +636,18 @@ export default function Dashboard() {
               </div>
               <div className="flex flex-col">
                 <h1
-                  className="text-2xl font-bold tracking-[0.4em] text-[var(--text-primary)] flex items-center gap-3 text-glow"
+                  className="notranslate text-2xl font-bold tracking-[0.18em] text-[var(--text-primary)] text-glow"
+                  translate="no"
+                  lang="en"
                   style={{ fontFamily: 'var(--font-roboto-mono), monospace' }}
                 >
-                  S H A D O W <span className="text-cyan-400">B R O K E R</span>
+                  Shadow<span className="text-cyan-400">broker</span>
                 </h1>
                 <span className="text-[9px] text-[var(--text-muted)] font-mono tracking-[0.3em] mt-1 ml-1">
                   全球威胁拦截
                 </span>
               </div>
             </motion.div>
-
-            {/* SYSTEM METRICS TOP LEFT */}
-            <div className="absolute top-2 left-6 text-[8px] font-mono tracking-widest text-cyan-500/50 z-[200] pointer-events-none hud-zone">
-              OPTIC VIS:113 SRC:180 DENS:1.42 0.8ms
-            </div>
-
-            {/* SYSTEM METRICS TOP RIGHT */}
-            <div className="absolute top-2 right-6 text-[9px] flex flex-col items-end font-mono tracking-widest text-[var(--text-muted)] z-[200] pointer-events-none hud-zone">
-              <div>RTX</div>
-              <div>VSR</div>
-            </div>
 
             {/* LEFT HUD CONTAINER — mirrors right side: one scroll container, scrollbar on LEFT edge */}
             <motion.div

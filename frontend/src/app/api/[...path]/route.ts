@@ -52,13 +52,12 @@ const NO_STORE_PROXY_HEADERS = {
   Pragma: 'no-cache',
 };
 const AI_QA_PATH = 'ai/qa';
-const AI_QA_DEFAULT_BASE_URL = 'http://10.24.116.25:8888';
-const AI_QA_DEFAULT_MODEL = '/data/dify/Qwen3.5-35B-A3B';
-const AI_QA_DEFAULT_KEY = 'EMPTY';
+const AI_QA_DEFAULT_BASE_URL = 'http://127.0.0.1:8900';
+const AI_QA_DEFAULT_MODEL = '';
+const AI_QA_DEFAULT_KEY = '';
 const AI_QA_DEFAULT_TIMEOUT_MS = 120000;
-const AI_QA_MAX_HISTORY_MESSAGES = 12;
 const AI_QA_EXEC_DEFAULT_TIMEOUT_MS = 25000;
-const AI_QA_EXEC_MAX_OUTPUT_CHARS = 12000;
+const AI_QA_EXEC_CAPTURE_MAX_OUTPUT_CHARS = 200000;
 const AI_QA_EXEC_MAX_ENDPOINTS = 3;
 const AI_QA_EXEC_MAX_DEST_KEYWORDS = 6;
 
@@ -70,14 +69,6 @@ function isRecord(value: unknown): value is UnknownRecord {
 
 function asString(value: unknown): string {
   return typeof value === 'string' ? value : '';
-}
-
-function clampNumber(value: unknown, min: number, max: number, fallback: number): number {
-  const num = Number(value);
-  if (!Number.isFinite(num)) return fallback;
-  if (num < min) return min;
-  if (num > max) return max;
-  return num;
 }
 
 function clampInteger(value: unknown, min: number, max: number, fallback: number): number {
@@ -93,6 +84,7 @@ type ScriptExecutionPlan = {
   label: string;
   scriptPath: string;
   args: string[];
+  summaryHint?: string;
 };
 
 type ScriptRunResult = {
@@ -111,6 +103,27 @@ type ExecuteModeResult = {
   succeeded: number;
   failed: number;
 };
+
+function buildExecuteModeResponse(
+  executeResult: ExecuteModeResult,
+  agentId: string,
+  fallbackDetail?: string,
+): NextResponse {
+  const prefix = fallbackDetail
+    ? `上游 nanobot 当前不可用，已回退到本地技能执行。\n原因: ${fallbackDetail}\n\n`
+    : '';
+  return NextResponse.json(
+    {
+      text: `${prefix}${executeResult.text}`,
+      agent_id: agentId,
+      execute_mode: true,
+      execute_succeeded: executeResult.succeeded,
+      execute_failed: executeResult.failed,
+      trace_id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+    },
+    { headers: NO_STORE_PROXY_HEADERS },
+  );
+}
 
 function resolveRepoRootFromCwd(): string {
   const cwd = process.cwd();
@@ -148,8 +161,9 @@ function extractApiEndpoints(userInput: string): string[] {
 }
 
 function sanitizeKeyword(raw: string): string {
-  const value = raw.trim().toLowerCase();
-  if (!/^[a-z0-9_-]{2,24}$/.test(value)) return '';
+  const value = raw.trim().toLowerCase().replace(/\s+/g, ' ');
+  if (!value || value.length > 40) return '';
+  if (/[\u0000-\u001f\u007f]/.test(value)) return '';
   return value;
 }
 
@@ -168,22 +182,49 @@ function collectFlightDestinationKeywords(userInput: string): string[] {
     add('narita');
     add('haneda');
   }
+  if (
+    lowered.includes('朝鲜') ||
+    lowered.includes('北韩') ||
+    lowered.includes('北朝鲜') ||
+    lowered.includes('north korea') ||
+    lowered.includes('dprk')
+  ) {
+    add('north korea');
+    add('dprk');
+    add('pyongyang');
+    add('fnj');
+  }
   if (lowered.includes('东京') || lowered.includes('tokyo')) add('tokyo');
   if (lowered.includes('大阪') || lowered.includes('osaka')) add('osaka');
   if (lowered.includes('札幌') || lowered.includes('sapporo')) add('sapporo');
   if (lowered.includes('福冈') || lowered.includes('fukuoka')) add('fukuoka');
   if (lowered.includes('冲绳') || lowered.includes('okinawa')) add('okinawa');
   if (lowered.includes('名古屋') || lowered.includes('nagoya')) add('nagoya');
+  if (lowered.includes('平壤') || lowered.includes('pyongyang')) add('pyongyang');
 
   const toMatch = lowered.match(/\bto\s+([a-zA-Z][a-zA-Z0-9_-]{1,20})\b/);
   if (toMatch?.[1]) add(toMatch[1]);
 
   const cnMatch = userInput.match(/(?:飞往|前往|去往|去|到)\s*([^\s，。,；;！？!?]+)/);
   if (cnMatch?.[1]) {
-    const token = cnMatch[1].trim();
+    const token = cnMatch[1]
+      .trim()
+      .replace(/的?(飞机|航班).*$/u, '')
+      .trim();
+    add(token);
     if (token.includes('日本')) add('japan');
     if (token.includes('东京')) add('tokyo');
     if (token.includes('大阪')) add('osaka');
+    if (token.includes('朝鲜') || token.includes('北韩')) {
+      add('north korea');
+      add('dprk');
+      add('pyongyang');
+      add('fnj');
+    }
+    if (token.includes('平壤')) {
+      add('pyongyang');
+      add('fnj');
+    }
   }
 
   return Array.from(out).slice(0, AI_QA_EXEC_MAX_DEST_KEYWORDS);
@@ -203,6 +244,10 @@ function buildExecutionPlans(userInput: string, repoRoot: string, backendBaseUrl
     hasFlightKeyword ||
     (hasTravelIntent && hasFlightLocationHint);
   if (flightHint) {
+    const destKeywords = collectFlightDestinationKeywords(userInput);
+    if (hasTravelIntent && destKeywords.length === 0) {
+      return plans;
+    }
     const scriptPath = path.join(
       repoRoot,
       'skills',
@@ -211,7 +256,6 @@ function buildExecutionPlans(userInput: string, repoRoot: string, backendBaseUrl
       'query_flights.py',
     );
     const args = ['--base-url', backendBaseUrl, '--limit', '50', '--json'];
-    const destKeywords = collectFlightDestinationKeywords(userInput);
     for (const keyword of destKeywords) {
       args.push('--dest-keyword', keyword);
     }
@@ -220,6 +264,7 @@ function buildExecutionPlans(userInput: string, repoRoot: string, backendBaseUrl
       label: '航班查询',
       scriptPath,
       args,
+      summaryHint: destKeywords.join(' / '),
     });
     return plans;
   }
@@ -341,11 +386,11 @@ function runCommand(
 
     child.stdout?.setEncoding('utf8');
     child.stdout?.on('data', (chunk: string) => {
-      stdout = appendCapped(stdout, chunk, AI_QA_EXEC_MAX_OUTPUT_CHARS);
+      stdout = appendCapped(stdout, chunk, AI_QA_EXEC_CAPTURE_MAX_OUTPUT_CHARS);
     });
     child.stderr?.setEncoding('utf8');
     child.stderr?.on('data', (chunk: string) => {
-      stderr = appendCapped(stderr, chunk, AI_QA_EXEC_MAX_OUTPUT_CHARS);
+      stderr = appendCapped(stderr, chunk, AI_QA_EXEC_CAPTURE_MAX_OUTPUT_CHARS);
     });
 
     child.on('error', (error) => {
@@ -353,8 +398,8 @@ function runCommand(
       resolve({
         ok: false,
         exitCode: null,
-        stdout: truncateText(stdout, AI_QA_EXEC_MAX_OUTPUT_CHARS),
-        stderr: truncateText(stderr, AI_QA_EXEC_MAX_OUTPUT_CHARS),
+        stdout,
+        stderr,
         timedOut,
         command: fullCommand,
         spawnError: error instanceof Error ? error.message : String(error),
@@ -366,8 +411,8 @@ function runCommand(
       resolve({
         ok: !timedOut && code === 0,
         exitCode: code,
-        stdout: truncateText(stdout, AI_QA_EXEC_MAX_OUTPUT_CHARS),
-        stderr: truncateText(stderr, AI_QA_EXEC_MAX_OUTPUT_CHARS),
+        stdout,
+        stderr,
         timedOut,
         command: fullCommand,
       });
@@ -416,6 +461,19 @@ function summarizeJson(value: unknown, maxChars = 2200): string {
   return truncateText(text, maxChars);
 }
 
+function summarizeTopCounts(rows: Array<Record<string, unknown>>, key: string, limit = 3): string {
+  const counts = new Map<string, number>();
+  for (const row of rows) {
+    const raw = asString(row[key]).trim() || 'UNKNOWN';
+    counts.set(raw, (counts.get(raw) || 0) + 1);
+  }
+  return Array.from(counts.entries())
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    .slice(0, limit)
+    .map(([name, count]) => `${name} x${count}`)
+    .join('；');
+}
+
 function summarizePlanOutput(plan: ScriptExecutionPlan, run: ScriptRunResult): string {
   if (!run.ok) {
     const errorInfo = [
@@ -450,10 +508,17 @@ function summarizePlanOutput(plan: ScriptExecutionPlan, run: ScriptRunResult): s
         : '';
       return `${String(idx + 1).padStart(2, '0')}. ${callsign} | ${origin} -> ${dest} | alt=${alt} speed=${speed} ${reasons ? `| ${reasons}` : ''}`;
     });
+    const destinationSummary = rows.length > 0 ? summarizeTopCounts(rows, 'dest_name') : '';
+    const originSummary = rows.length > 0 ? summarizeTopCounts(rows, 'origin_name') : '';
     return [
       `【${plan.label}】`,
       `状态: 成功，匹配 ${rows.length} 条`,
       run.command ? `命令: ${run.command}` : '',
+      rows.length > 0
+        ? `结论: 当前命中 ${rows.length} 架与查询条件相关的航班${plan.summaryHint ? `（${plan.summaryHint}）` : ''}。`
+        : `结论: 当前数据里没有命中与查询条件相关的航班${plan.summaryHint ? `（${plan.summaryHint}）` : ''}。`,
+      destinationSummary ? `目的地分布: ${destinationSummary}` : '',
+      originSummary ? `主要出发地: ${originSummary}` : '',
       lines.length > 0 ? lines.join('\n') : '无匹配结果',
     ]
       .filter(Boolean)
@@ -522,82 +587,6 @@ async function runExecuteMode(
   };
 }
 
-function parseSkillFrontmatter(raw: string): { name: string; description: string } {
-  const match = raw.match(/^---\s*\n([\s\S]*?)\n---\s*\n?/);
-  if (!match) return { name: '', description: '' };
-  const lines = match[1]?.split('\n') || [];
-  const values: Record<string, string> = {};
-  for (const line of lines) {
-    const idx = line.indexOf(':');
-    if (idx <= 0) continue;
-    const key = line.slice(0, idx).trim();
-    const value = line.slice(idx + 1).trim().replace(/^['"]|['"]$/g, '');
-    if (key) values[key] = value;
-  }
-  return {
-    name: values.name || '',
-    description: values.description || '',
-  };
-}
-
-function extractPrimarySkillCommand(raw: string): string {
-  const block = raw.match(/```bash\s*\n([\s\S]*?)```/);
-  if (!block?.[1]) return '';
-  const lines = block[1]
-    .split('\n')
-    .map((line) => line.trim())
-    .filter((line) => line && !line.startsWith('#'));
-  if (lines.length === 0) return '';
-  return lines.slice(0, 2).join(' ');
-}
-
-function extractSkillSnippet(raw: string): string {
-  const body = raw.replace(/^---\s*\n[\s\S]*?\n---\s*\n?/, '').trim();
-  return body.replace(/`/g, '').replace(/\s+/g, ' ').trim().slice(0, 900);
-}
-
-let skillContextCache: { value: string; expiresAt: number } | null = null;
-
-function loadSkillContext(repoRoot: string): string {
-  const now = Date.now();
-  if (skillContextCache && skillContextCache.expiresAt > now) {
-    return skillContextCache.value;
-  }
-  const skillsDir = path.join(repoRoot, 'skills');
-  if (!fs.existsSync(skillsDir)) {
-    const fallback = 'No local skills directory found.';
-    skillContextCache = { value: fallback, expiresAt: now + 30_000 };
-    return fallback;
-  }
-
-  const summaries: string[] = [];
-  const entries = fs.readdirSync(skillsDir, { withFileTypes: true });
-  for (const entry of entries) {
-    if (!entry.isDirectory()) continue;
-    const skillPath = path.join(skillsDir, entry.name, 'SKILL.md');
-    if (!fs.existsSync(skillPath)) continue;
-    try {
-      const raw = fs.readFileSync(skillPath, 'utf8');
-      const frontmatter = parseSkillFrontmatter(raw);
-      const name = frontmatter.name || entry.name;
-      const description = frontmatter.description || 'No description.';
-      const command = extractPrimarySkillCommand(raw);
-      const snippet = extractSkillSnippet(raw);
-      const commandPart = command ? ` Primary command: ${command}` : '';
-      const snippetPart = snippet ? ` Workflow snippet: ${snippet}` : '';
-      summaries.push(`- $${name}: ${description}${commandPart}${snippetPart}`);
-    } catch {
-      summaries.push(`- $${entry.name}: unreadable skill file.`);
-    }
-  }
-
-  const value = summaries.length > 0
-    ? summaries.join('\n')
-    : 'No skills discovered in local skills directory.';
-  skillContextCache = { value, expiresAt: now + 30_000 };
-  return value;
-}
-
 function extractAiUpstreamError(payload: unknown, fallback: string): string {
   if (!isRecord(payload)) return fallback;
   const detail = asString(payload.detail).trim();
@@ -620,51 +609,6 @@ function safeJsonParse(raw: string): unknown {
   }
 }
 
-function buildAiQaMessages(body: UnknownRecord, repoRoot: string): Array<{ role: 'system' | 'user' | 'assistant'; content: string }> {
-  const userInput = asString(body.message).trim();
-  const agent = isRecord(body.agent) ? body.agent : {};
-  const agentPrompt = asString(agent.systemPrompt).trim() || 'You are a helpful assistant.';
-
-  let metadataSummary = '';
-  const metadata = isRecord(body.metadata) ? body.metadata : {};
-  if (Object.keys(metadata).length > 0) {
-    try {
-      metadataSummary = `\n\nRuntime context (JSON): ${JSON.stringify(metadata).slice(0, 5000)}`;
-    } catch {
-      metadataSummary = '\n\nRuntime context (JSON): [unserializable metadata]';
-    }
-  }
-
-  const systemPrompt = [
-    agentPrompt,
-    '',
-    'Available local skills from this repository:',
-    loadSkillContext(repoRoot),
-    '',
-    'When relevant, select one or more skills explicitly and align your answer with their workflows.',
-    metadataSummary,
-  ].join('\n');
-
-  const messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }> = [
-    { role: 'system', content: systemPrompt },
-  ];
-
-  const historyRaw = Array.isArray(body.history) ? body.history : [];
-  const history = historyRaw.slice(-AI_QA_MAX_HISTORY_MESSAGES);
-  for (const item of history) {
-    if (!isRecord(item)) continue;
-    const role = asString(item.role);
-    if (role !== 'user' && role !== 'assistant') continue;
-    const content = asString(item.content).trim();
-    if (!content) continue;
-    messages.push({ role, content });
-  }
-  if (userInput) {
-    messages.push({ role: 'user', content: userInput });
-  }
-  return messages;
-}
-
 async function handleAiQa(req: NextRequest): Promise<NextResponse> {
   if (req.method !== 'POST') {
     return NextResponse.json(
@@ -684,8 +628,6 @@ async function handleAiQa(req: NextRequest): Promise<NextResponse> {
   const options = isRecord(body.options) ? body.options : {};
   const executeMode = Boolean(options.executeMode);
   const model = String(process.env.AI_QA_MODEL || AI_QA_DEFAULT_MODEL).trim();
-  const temperature = clampNumber(options.temperature, 0, 2, 0.7);
-  const maxTokens = clampInteger(options.maxTokens, 64, 20000, 2000);
   const timeoutMs = clampInteger(process.env.AI_QA_TIMEOUT_MS, 1000, 300000, AI_QA_DEFAULT_TIMEOUT_MS);
   const baseUrl = String(process.env.AI_QA_BASE_URL || AI_QA_DEFAULT_BASE_URL).trim().replace(/\/+$/, '');
   const apiKey = String(process.env.AI_QA_API_KEY || AI_QA_DEFAULT_KEY).trim();
@@ -693,30 +635,13 @@ async function handleAiQa(req: NextRequest): Promise<NextResponse> {
   const backendBaseUrl = String(process.env.BACKEND_URL || 'http://127.0.0.1:8000').trim();
   const agent = isRecord(body.agent) ? body.agent : {};
   const agentId = asString(body.agent_id || agent.id).trim() || 'default';
+  const sessionId = asString(body.session_id).trim() || `ai-qa-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 
   if (executeMode) {
     const executeResult = await runExecuteMode(body, repoRoot, backendBaseUrl);
-    if (!executeResult.attempted) {
-      return NextResponse.json(
-        {
-          error: '执行模式未命中可执行技能',
-          detail:
-            '当前问题未匹配到可执行技能（flight-query/osint-query）。请明确写出查询目标，例如“飞往日本的航班”或“查询 /api/health”。',
-        },
-        { status: 422, headers: NO_STORE_PROXY_HEADERS },
-      );
+    if (executeResult.attempted) {
+      return buildExecuteModeResponse(executeResult, agentId);
     }
-    return NextResponse.json(
-      {
-        text: executeResult.text,
-        agent_id: agentId,
-        execute_mode: true,
-        execute_succeeded: executeResult.succeeded,
-        execute_failed: executeResult.failed,
-        trace_id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
-      },
-      { headers: NO_STORE_PROXY_HEADERS },
-    );
   }
 
   const controller = new AbortController();
@@ -726,14 +651,12 @@ async function handleAiQa(req: NextRequest): Promise<NextResponse> {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${apiKey || AI_QA_DEFAULT_KEY}`,
+        ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}),
       },
       body: JSON.stringify({
-        model,
-        messages: buildAiQaMessages(body, repoRoot),
-        temperature,
-        max_tokens: maxTokens,
-        chat_template_kwargs: { enable_thinking: false },
+        ...(model ? { model } : {}),
+        messages: [{ role: 'user', content: message }],
+        session_id: sessionId,
       }),
       cache: 'no-store',
       signal: controller.signal,
@@ -764,6 +687,11 @@ async function handleAiQa(req: NextRequest): Promise<NextResponse> {
       { headers: NO_STORE_PROXY_HEADERS },
     );
   } catch (error) {
+    const fallbackExecuteResult = await runExecuteMode(body, repoRoot, backendBaseUrl);
+    if (fallbackExecuteResult.attempted) {
+      const detail = error instanceof Error ? error.message : '未知错误';
+      return buildExecuteModeResponse(fallbackExecuteResult, agentId, detail);
+    }
     return NextResponse.json(
       {
         error: '调用上游 AI 失败',

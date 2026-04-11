@@ -1,5 +1,6 @@
 import type { NextConfig } from 'next';
 import { networkInterfaces } from 'os';
+import { fileURLToPath } from 'url';
 
 // /api/* requests are proxied to the backend by the catch-all route handler at
 // src/app/api/[...path]/route.ts, which reads BACKEND_URL at request time.
@@ -9,6 +10,7 @@ import { networkInterfaces } from 'os';
 const skipTypecheck = process.env.NEXT_SKIP_TYPECHECK === '1';
 const isDev = process.env.NODE_ENV !== 'production';
 const frontendPort = String(process.env.FRONTEND_PORT || process.env.PORT || '6789');
+const projectRoot = fileURLToPath(new URL('.', import.meta.url));
 
 function formatHostForOrigin(host: string): string {
   const normalized = String(host || '').trim();
@@ -95,6 +97,12 @@ const nextConfig: NextConfig = {
   output: 'standalone',
   devIndicators: false,
   allowedDevOrigins: buildAllowedDevOrigins(),
+  turbopack: {
+    // This repo lives under /data/aYJC, which also has an unrelated lockfile.
+    // Without an explicit root, Turbopack can infer the wrong workspace root
+    // and fail to resolve frontend-only deps like `tailwindcss`.
+    root: projectRoot,
+  },
   images: {
     remotePatterns: [
       { protocol: 'https', hostname: 'upload.wikimedia.org' },

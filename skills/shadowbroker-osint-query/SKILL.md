@@ -11,16 +11,21 @@ description: "快速查询 Shadowbroker API 与后端数据文件，并基于证
 
 1. 判断用户问题的类型。
 2. 从 `references/api-endpoints.md` 或 `references/backend-data-catalog.md` 中选择端点或数据源。
-3. 使用 `scripts/` 中的脚本拉取最小必要数据。
+3. 通过 `SHADOWBROKER_API_BASE` 指向的 ShadowBroker 接口，用 `scripts/` 中的脚本拉取最小必要数据。
 4. 按用户要求做精确过滤或聚合。
 5. 返回证据，并注明端点或文件以及关键字段。
+
+## 运行前提
+
+- 优先依赖环境变量 `SHADOWBROKER_API_BASE`，不要在命令里硬编码 `localhost` / `127.0.0.1` 之类的私网地址。
+- `SHADOWBROKER_API_BASE` 应该指向 ShadowBroker 前端接口根，例如 `http://host.docker.internal:6789` 或你的公开入口。
+- 使用 nanobot 的 `exec` 工具时，必须把 `working_dir` 设为 `skills/shadowbroker-osint-query`，否则 `python scripts/query_api.py` / `python scripts/profile_backend_data.py` 会在错误目录下执行。
 
 ## 快速命令
 
 ```bash
 # 1) 查询单个端点，并可选提取某个字段
 python scripts/query_api.py \
-  --base-url http://127.0.0.1:8000 \
   --endpoint /api/live-data/fast \
   --extract commercial_flights \
   --limit 20
@@ -29,6 +34,15 @@ python scripts/query_api.py \
 python scripts/profile_backend_data.py \
   --data-dir ../../backend/data \
   --inspect-json-keys
+```
+
+对应的 `exec` 调用应类似：
+
+```json
+{
+  "command": "python scripts/query_api.py --endpoint /api/health",
+  "working_dir": "skills/shadowbroker-osint-query"
+}
 ```
 
 ## 选择数据源

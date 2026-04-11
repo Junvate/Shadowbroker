@@ -33,6 +33,7 @@ export interface AiQaRequestPayload {
   message: string;
   history: AiQaChatMessage[];
   agent: AiQaAgentConfig;
+  sessionId?: string;
   options: {
     temperature: number;
     maxTokens: number;
@@ -87,17 +88,18 @@ export const DEFAULT_AI_QA_CONFIG: AiQaPanelConfig = {
   title: 'AI 问答',
   subtitle: '情报分析与问答',
   welcomeMessage:
-    'AI 问答模块已就绪。已接入本地技能上下文（flight-query / osint-query）。建议开启可执行模式，仅返回真实执行结果。',
-  placeholder: '输入问题、任务指令或情报分析请求...',
+    '默认始终先走 nanobot 对话。模型会根据你的问题，自行决定是否调用本地航班查询技能。',
+  placeholder: '输入问题或航班查询，例如：调查一下去日本的飞机...',
   sendButtonLabel: '发送',
   storageKey: 'sb_ai_qa_v1',
   maxMessages: 48,
   quickPrompts: [
-    '使用 $shadowbroker-osint-query，读取 /api/live-data/fast，给我 flights/ships/sigint 的关键概览与字段样例。',
-    '使用 $shadowbroker-flight-query，按目的地关键词 tokyo 查询航班，返回前 20 条并按 match_score 排序。',
-    '检查 backend/data 的核心数据集可用性，列出缺失文件和异常字段。',
-    '读取 /api/health 与 /api/live-data/fast，输出当前系统健康状态和告警项。',
-    '基于当前地图上下文，生成 60 秒行动简报（结论/风险/下一步）。',
+    '调查一下去日本的飞机',
+    '查询飞往东京的航班',
+    '查询去大阪的飞机',
+    '查询飞往札幌的航班',
+    '查询飞往福冈的飞机',
+    '查询去冲绳的飞机',
   ],
   defaultAgentId: 'shadowbroker-ai',
   agents: DEFAULT_AGENTS,
@@ -240,6 +242,7 @@ async function requestViaHttp(
       headers: config.transport.headers,
       body: JSON.stringify({
         message: request.message,
+        session_id: request.sessionId,
         agent_id: request.agent.id,
         agent: request.agent,
         options: request.options,

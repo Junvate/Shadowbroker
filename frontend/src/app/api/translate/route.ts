@@ -15,6 +15,8 @@ type TranslateRequestBody = {
   targetLang?: unknown;
 };
 
+type TranslateProvider = 'auto' | 'deepl' | 'niutrans';
+
 let niutransQueue: Promise<unknown> = Promise.resolve();
 let niutransLastCallAt = 0;
 const serverTranslationCache = new Map<string, string>();
@@ -185,6 +187,13 @@ function sanitizeTargetLang(raw: unknown): string {
   return upper;
 }
 
+function normalizeTranslateProvider(raw: string): TranslateProvider {
+  const value = String(raw || '').trim().toLowerCase();
+  if (value === 'deepl') return 'deepl';
+  if (value === 'niutrans' || value === 'niu') return 'niutrans';
+  return 'auto';
+}
+
 function mapTargetForNiuTrans(targetLang: string): string {
   const t = String(targetLang || '').toUpperCase();
   if (t.startsWith('ZH')) return 'zh';
@@ -334,6 +343,11 @@ export async function POST(req: NextRequest) {
       process.env.DEEPL_API_KEY ||
       readBackendEnvKey('DEEPL_API_KEY')
     ).trim();
+    const translateProvider = normalizeTranslateProvider(
+      process.env.TRANSLATE_PROVIDER ||
+      readBackendEnvKey('TRANSLATE_PROVIDER') ||
+      '',
+    );
     const niuAllowInsecureRaw = (
       process.env.NIUTRANS_TLS_ALLOW_INSECURE ||
       readBackendEnvKey('NIUTRANS_TLS_ALLOW_INSECURE') ||
@@ -360,7 +374,7 @@ export async function POST(req: NextRequest) {
         {
           ok: false,
           error: 'missing_translate_api_key',
-          detail: 'Set NIUTRANS_API_KEY in backend/.env (or DEEPL_API_KEY as fallback).',
+          detail: 'Set DEEPL_API_KEY or NIUTRANS_API_KEY in backend/.env.',
         },
         { status: 503 },
       );
@@ -378,15 +392,25 @@ export async function POST(req: NextRequest) {
     const missing = uniq.filter((item) => !serverTranslationCache.has(item));
     if (missing.length > 0) {
       let translatedMissing: string[] = missing;
-      if (niuApiKey) {
-        translatedMissing = await translateWithNiuTrans(
-          niuApiKey,
-          missing,
-          targetLang,
-          niuTlsConfig,
-        );
-      } else if (deeplApiKey) {
-        translatedMissing = await translateBatch(deeplApiKey, missing, targetLang);
+      const providerOrder: TranslateProvider[] =
+        translateProvider === 'deepl'
+          ? ['deepl', 'niutrans']
+          : ['niutrans', 'deepl'];
+
+      for (const provider of providerOrder) {
+        if (provider === 'deepl' && deeplApiKey) {
+          translatedMissing = await translateBatch(deeplApiKey, missing, targetLang);
+          break;
+        }
+        if (provider === 'niutrans' && niuApiKey) {
+          translatedMissing = await translateWithNiuTrans(
+            niuApiKey,
+            missing,
+            targetLang,
+            niuTlsConfig,
+          );
+          break;
+        }
       }
       for (let i = 0; i < missing.length; i += 1) {
         serverTranslationCache.set(missing[i], translatedMissing[i] || missing[i]);

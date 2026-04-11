@@ -6,6 +6,7 @@ const frontendDir = path.resolve(__dirname, "..");
 const backendDir = path.resolve(frontendDir, "..", "backend");
 const frontendHost = String(process.env.FRONTEND_HOST || "0.0.0.0");
 const frontendPort = String(process.env.FRONTEND_PORT || "6789");
+const frontendBundler = String(process.env.NEXT_DEV_BUNDLER || "webpack").trim().toLowerCase();
 const backendHost = String(process.env.BACKEND_HOST || "0.0.0.0");
 const backendPort = String(process.env.BACKEND_PORT || "8000");
 const npmCmd = process.platform === "win32" ? "npm.cmd" : "npm";
@@ -28,13 +29,17 @@ const backendBootstrapPythonCandidates = process.platform === "win32"
   ? [process.env.PYTHON, "py", "python", "python3"].filter(Boolean)
   : [process.env.PYTHON, "python3", "python"].filter(Boolean);
 
-function runSyncChecked(file, args, cwd, label) {
-  const result = spawnSync(file, args, {
+function runSync(file, args, cwd, envOverrides = {}) {
+  return spawnSync(file, args, {
     cwd,
     stdio: "inherit",
-    env: process.env,
+    env: { ...process.env, ...envOverrides },
     windowsHide: false,
   });
+}
+
+function runSyncChecked(file, args, cwd, label, envOverrides = {}) {
+  const result = runSync(file, args, cwd, envOverrides);
   if (result.status !== 0) {
     console.error(`[${label}] failed with exit code ${result.status ?? 1}`);
     process.exit(result.status ?? 1);
@@ -79,6 +84,16 @@ function detectBootstrapPython() {
   return null;
 }
 
+function buildVenvEnv(pythonPath) {
+  const binDir = path.dirname(pythonPath);
+  const venvDir = path.dirname(binDir);
+  const pathKey = process.platform === "win32" ? "Path" : "PATH";
+  return {
+    VIRTUAL_ENV: venvDir,
+    [pathKey]: `${binDir}${path.delimiter}${process.env[pathKey] || ""}`,
+  };
+}
+
 function ensureBackendPython() {
   let backendPython = detectBackendPython();
   if (backendPython) {
@@ -102,8 +117,17 @@ function ensureBackendPython() {
   if (!hasBackendRuntime(backendVenvPython)) {
     console.log("[backend] Installing Python dependencies (first run only)...");
     if (commandExists("uv")) {
-      runSyncChecked("uv", ["sync", "--frozen", "--no-dev"], path.resolve(backendDir, ".."), "backend uv sync");
-    } else {
+      const uvResult = runSync(
+        "uv",
+        ["sync", "--frozen", "--no-dev", "--active", "--package", "backend"],
+        path.resolve(backendDir, ".."),
+        buildVenvEnv(backendVenvPython),
+      );
+      if (uvResult.status !== 0) {
+        console.warn("[backend] uv sync failed, falling back to pip install into backend venv.");
+      }
+    }
+    if (!hasBackendRuntime(backendVenvPython)) {
       runSyncChecked(backendVenvPython, ["-m", "pip", "install", "--upgrade", "pip"], backendDir, "backend pip upgrade");
       runSyncChecked(backendVenvPython, ["-m", "pip", "install", "-e", "."], backendDir, "backend pip install");
     }
@@ -136,6 +160,15 @@ function defaultBackendConnectHost() {
   if (normalized === "0.0.0.0") return "127.0.0.1";
   if (normalized === "::" || normalized === "0:0:0:0:0:0:0:0") return "::1";
   return backendHost;
+}
+
+function buildFrontendArgs() {
+  const args = [nextBin, "dev"];
+  if (frontendBundler === "webpack") {
+    args.push("--webpack");
+  }
+  args.push("--hostname", frontendHost, "--port", frontendPort);
+  return args;
 }
 
 ensureFrontendDeps();
@@ -195,7 +228,7 @@ process.on("SIGTERM", () => shutdown(0));
 start(
   "frontend",
   process.execPath,
-  [nextBin, "dev", "--hostname", frontendHost, "--port", frontendPort],
+  buildFrontendArgs(),
   frontendDir,
   { BACKEND_URL: backendUrl },
 );

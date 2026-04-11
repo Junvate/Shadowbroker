@@ -14,12 +14,24 @@ description: 使用可复用条件（目的地、出发地、callsign、IATA、�
 3. 应用可复用过滤条件（关键词、callsign 前缀、出发地/目的地、IATA、地理围栏）。
 4. 按匹配原因排序并返回紧凑证据。
 
+## 运行前提
+
+- 使用 nanobot 的 `exec` 工具时，必须把 `working_dir` 设为 `skills/shadowbroker-flight-query`，否则 `python scripts/query_flights.py` 会在错误目录下执行。
+
 ## 主命令
 
 ```bash
 python scripts/query_flights.py \
-  --base-url http://127.0.0.1:8000 \
   --limit 50
+```
+
+对应的 `exec` 调用应类似：
+
+```json
+{
+  "command": "python scripts/query_flights.py --limit 50",
+  "working_dir": "skills/shadowbroker-flight-query"
+}
 ```
 
 ## 常见示例

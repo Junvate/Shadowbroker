@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "node scripts/dev-all.cjs",
-    "dev:frontend": "next dev",
+    "dev:frontend": "next dev --webpack",
     "dev:backend": "node ../start-backend.js",
     "build": "next build",
     "start": "next start",

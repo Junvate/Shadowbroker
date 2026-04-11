@@ -106,7 +106,7 @@ if command -v uv &> /dev/null; then
     source venv/bin/activate
     echo "[*] Installing Python dependencies via UV (fast)..."
     cd "$SCRIPT_DIR"
-    uv sync --frozen --no-dev
+    uv sync --frozen --no-dev --active --package backend
     cd "$SCRIPT_DIR/backend"
 else
     echo "[*] UV not found, using pip (install UV for faster installs: https://docs.astral.sh/uv/)"

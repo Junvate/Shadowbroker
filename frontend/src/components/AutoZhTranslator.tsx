@@ -9,8 +9,8 @@ const MAX_TEXT_LENGTH = 240;
 const MAX_SCAN_ITEMS = 1400;
 const MAX_PENDING_API_TEXTS = 64;
 const MAX_CACHE_ENTRIES = 5000;
-const PASS_INTERVAL_MS = 650;
-const MUTATION_DELAY_MS = 80;
+const MUTATION_DELAY_MS = 180;
+const VISIBILITY_RECHECK_MS = 1200;
 const ERROR_COOLDOWN_MS = 6000;
 
 type TranslateTask =
@@ -29,6 +29,9 @@ type TranslateTask =
 function shouldSkipElement(el: Element | null): boolean {
   if (!el) return true;
   if (el.closest('[data-no-auto-zh]')) return true;
+  if (el.closest('[translate="no"]')) return true;
+  if (el.closest('.notranslate')) return true;
+  if (el.closest('[lang="en"]')) return true;
   const tag = el.tagName.toLowerCase();
   if (['script', 'style', 'code', 'pre', 'noscript', 'svg'].includes(tag)) return true;
   if (el.closest('script,style,code,pre,noscript,svg')) return true;
@@ -75,7 +78,6 @@ export default function AutoZhTranslator() {
   const cooldownUntilRef = useRef(0);
   const observerRef = useRef<MutationObserver | null>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
     cacheRef.current = safeLoadCache();
@@ -167,7 +169,7 @@ export default function AutoZhTranslator() {
             const err = await resp.json().catch(() => ({}));
             if ((err as { error?: string })?.error === 'missing_translate_api_key') {
               console.warn(
-                '[AutoZhTranslator] Missing NIUTRANS_API_KEY in backend/.env (or DEEPL_API_KEY fallback).',
+                '[AutoZhTranslator] Missing translation API key in backend/.env. Set DEEPL_API_KEY or NIUTRANS_API_KEY.',
               );
             }
             cooldownUntilRef.current = Date.now() + 30_000;
@@ -205,6 +207,12 @@ export default function AutoZhTranslator() {
       }, delay);
     };
 
+    const onVisibilityOrFocus = () => {
+      if (document.visibilityState === 'visible') {
+        schedule(VISIBILITY_RECHECK_MS);
+      }
+    };
+
     schedule();
     observerRef.current = new MutationObserver(() => schedule(MUTATION_DELAY_MS));
     observerRef.current.observe(document.body, {
@@ -214,15 +222,15 @@ export default function AutoZhTranslator() {
       attributes: true,
       attributeFilter: ['placeholder', 'title', 'aria-label', 'value'],
     });
-    intervalRef.current = setInterval(() => {
-      void applyTasks();
-    }, PASS_INTERVAL_MS);
+    window.addEventListener('focus', onVisibilityOrFocus);
+    document.addEventListener('visibilitychange', onVisibilityOrFocus);
 
     return () => {
       if (timerRef.current) clearTimeout(timerRef.current);
-      if (intervalRef.current) clearInterval(intervalRef.current);
       observerRef.current?.disconnect();
       observerRef.current = null;
+      window.removeEventListener('focus', onVisibilityOrFocus);
+      document.removeEventListener('visibilitychange', onVisibilityOrFocus);
     };
   }, []);
 

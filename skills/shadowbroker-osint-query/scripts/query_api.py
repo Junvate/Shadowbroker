@@ -5,13 +5,14 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 from pathlib import Path
 from typing import Any
 from urllib import error, parse, request
 
 
-DEFAULT_BASE_URL = "http://127.0.0.1:8000"
+DEFAULT_BASE_URL = os.environ.get("SHADOWBROKER_API_BASE", "http://127.0.0.1:6789")
 
 
 def parse_key_value(items: list[str]) -> dict[str, str]:
@@ -57,7 +58,11 @@ def build_url(base_url: str, endpoint: str, query: dict[str, str]) -> str:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="查询 Shadowbroker API 端点。")
-    parser.add_argument("--base-url", default=DEFAULT_BASE_URL, help="API 基础地址")
+    parser.add_argument(
+        "--base-url",
+        default=DEFAULT_BASE_URL,
+        help="ShadowBroker 接口基础地址（默认读取 SHADOWBROKER_API_BASE）",
+    )
     parser.add_argument("--endpoint", required=True, help="端点路径，例如 /api/live-data/fast")
     parser.add_argument("--method", default="GET", choices=["GET", "POST"], help="HTTP 方法")
     parser.add_argument("--param", action="append", default=[], help="查询参数 key=value（可重复）")

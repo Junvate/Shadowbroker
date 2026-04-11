@@ -5,13 +5,14 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import sys
 from typing import Any
 from urllib import error, request
 
 
-DEFAULT_BASE_URL = "http://127.0.0.1:8000"
+DEFAULT_BASE_URL = os.environ.get("SHADOWBROKER_API_BASE", "http://127.0.0.1:6789")
 FLIGHT_BUCKETS = ["commercial_flights", "private_jets", "private_flights", "tracked_flights"]
 TEXT_MATCH_FIELDS = [
     "callsign",
@@ -209,7 +210,11 @@ def sort_key(sort_mode: str, row: dict[str, Any]) -> tuple[Any, ...]:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="从 Shadowbroker fast feed 查询并过滤实时航班。")
-    parser.add_argument("--base-url", default=DEFAULT_BASE_URL, help="Shadowbroker 后端基础地址")
+    parser.add_argument(
+        "--base-url",
+        default=DEFAULT_BASE_URL,
+        help="ShadowBroker 接口基础地址（默认读取 SHADOWBROKER_API_BASE）",
+    )
     parser.add_argument("--timeout", type=float, default=12.0, help="HTTP 超时时间（秒）")
     parser.add_argument("--limit", type=int, default=50, help="最多输出多少条结果")
     parser.add_argument("--json", action="store_true", help="输出 JSON")
