@@ -13,7 +13,6 @@ import {
   Ship,
   Eye,
   Anchor,
-  Settings,
   Sun,
   Moon,
   Radio,
@@ -482,7 +481,6 @@ function SdrTracker({
 const WorldviewLeftPanel = React.memo(function WorldviewLeftPanel({
   activeLayers,
   setActiveLayers,
-  onSettingsClick,
   gibsDate,
   setGibsDate,
   gibsOpacity,
@@ -505,7 +503,6 @@ const WorldviewLeftPanel = React.memo(function WorldviewLeftPanel({
 }: {
   activeLayers: ActiveLayers;
   setActiveLayers: React.Dispatch<React.SetStateAction<ActiveLayers>>;
-  onSettingsClick?: () => void;
   gibsDate?: string;
   setGibsDate?: (d: string) => void;
   gibsOpacity?: number;
@@ -534,7 +531,7 @@ const WorldviewLeftPanel = React.memo(function WorldviewLeftPanel({
     setInternalMinimized(newVal);
     onMinimizedChange?.(newVal);
   };
-  const { theme, uiLanguage } = useTheme();
+  const { uiLanguage } = useTheme();
   const [gibsPlaying, setGibsPlaying] = useState(false);
   const [potusEnabled, setPotusEnabled] = useState(true);
   const gibsIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -909,19 +906,6 @@ const WorldviewLeftPanel = React.memo(function WorldviewLeftPanel({
       ],
     },
     {
-      label: 'SHODAN',
-      icon: Search,
-      layers: [
-        {
-          id: 'shodan_overlay',
-          name: 'Shodan Overlay',
-          source: 'Operator Search',
-          count: shodanResultCount,
-          icon: Search,
-        },
-      ],
-    },
-    {
       label: 'SIGINT',
       icon: Radio,
       layers: [
@@ -1010,6 +994,19 @@ const WorldviewLeftPanel = React.memo(function WorldviewLeftPanel({
         },
       ],
     },
+    {
+      label: 'SHODAN',
+      icon: Search,
+      layers: [
+        {
+          id: 'shodan_overlay',
+          name: 'Shodan Overlay',
+          source: 'Operator Search',
+          count: shodanResultCount,
+          icon: Search,
+        },
+      ],
+    },
   ];
 
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>(() => {
@@ -1042,29 +1039,10 @@ const WorldviewLeftPanel = React.memo(function WorldviewLeftPanel({
       initial={{ opacity: 0, x: -50 }}
       animate={{ opacity: 1, x: 0 }}
       transition={{ duration: 1 }}
-      className={`w-full flex flex-col pointer-events-none ${isMinimized ? 'flex-shrink-0' : 'flex-1 min-h-[300px]'}`}
+      className={`w-full h-full flex flex-col pointer-events-none ${isMinimized ? 'flex-shrink-0' : 'flex-1 min-h-[560px]'}`}
     >
-      {/* Header */}
-      <div className="mb-6 pointer-events-auto">
-        <div className="flex items-center gap-3">
-          <h1 className="text-2xl font-bold tracking-[0.2em] text-[var(--text-heading)]">热成像</h1>
-          {onSettingsClick && (
-            <button
-              onClick={onSettingsClick}
-              className={`w-7 h-7 border border-[var(--border-primary)] hover:border-cyan-500/50 flex items-center justify-center ${theme === 'dark' ? 'text-cyan-400' : 'text-[var(--text-muted)]'} hover:text-cyan-300 transition-all hover:bg-[var(--hover-accent)] group`}
-              title="System Settings"
-            >
-              <Settings
-                size={14}
-                className="group-hover:rotate-90 transition-transform duration-300"
-              />
-            </button>
-          )}
-        </div>
-      </div>
-
       {/* Data Layers Box */}
-      <div className={`bg-[#0a0a0a]/90 backdrop-blur-sm border border-cyan-900/40 pointer-events-auto flex flex-col relative overflow-hidden max-h-full ${isMinimized ? 'flex-shrink-0' : 'flex-1 min-h-0'}`}>
+      <div className={`bg-[#0a0a0a]/90 backdrop-blur-sm border border-cyan-900/40 pointer-events-auto flex flex-col relative overflow-hidden h-full max-h-full ${isMinimized ? 'flex-shrink-0' : 'flex-1 min-h-0'}`}>
         {/* Header / Toggle */}
         <div 
           className="flex justify-between items-center p-4 cursor-pointer hover:bg-[var(--bg-secondary)]/50 transition-colors border-b border-[var(--border-primary)]/50"
@@ -1130,7 +1108,7 @@ const WorldviewLeftPanel = React.memo(function WorldviewLeftPanel({
               exit={{ height: 0, opacity: 0 }}
               className="overflow-y-auto styled-scrollbar"
             >
-              <div className="flex flex-col gap-6 p-4 pt-2 pb-6">
+              <div className="flex flex-col gap-8 p-4 pt-3 pb-8">
                 {/* SDR TRACKER — pinned to TOP when active, with embedded receiver */}
                 {trackedSdr && (
                   <SdrTracker
@@ -1240,7 +1218,7 @@ const WorldviewLeftPanel = React.memo(function WorldviewLeftPanel({
                   return (
                     <div key={section.label} className="flex flex-col">
                       {/* Section header */}
-                      <div className="flex items-center justify-between mb-1">
+                      <div className="flex items-center justify-between mb-2">
                         <div
                           className="flex items-center gap-2 cursor-pointer flex-1"
                           onClick={() =>
@@ -1321,16 +1299,16 @@ const WorldviewLeftPanel = React.memo(function WorldviewLeftPanel({
 
                       {/* Section layers (collapsible) */}
                       {expanded && (
-                        <div className="flex flex-col gap-3 ml-1 pl-3 border-l border-[var(--border-primary)]/30 mt-2 mb-2">
+                        <div className="flex flex-col gap-4 ml-1 pl-4 border-l border-[var(--border-primary)]/30 mt-3 mb-3">
                           {section.layers.map((layer) => {
                             const Icon = layer.icon;
                             const active =
                               activeLayers[layer.id as keyof typeof activeLayers] || false;
 
                             return (
-                              <div key={layer.id} className="flex flex-col">
+                              <div key={layer.id} className="flex flex-col py-1">
                                 <div
-                                  className="flex items-start justify-between group cursor-pointer"
+                                  className="flex items-start justify-between gap-3 group cursor-pointer"
                                   onClick={() =>
                                     setActiveLayers((prev: ActiveLayers) => ({
                                       ...prev,
@@ -1338,7 +1316,7 @@ const WorldviewLeftPanel = React.memo(function WorldviewLeftPanel({
                                     }))
                                   }
                                 >
-                                  <div className="flex gap-3">
+                                  <div className="flex gap-3.5">
                                     <div
                                       className={`mt-0.5 ${
                                         layer.id === 'shodan_overlay'
@@ -1356,7 +1334,7 @@ const WorldviewLeftPanel = React.memo(function WorldviewLeftPanel({
                                         <Icon size={14} strokeWidth={1.5} />
                                       )}
                                     </div>
-                                    <div className="flex flex-col">
+                                    <div className="flex flex-col gap-1">
                                       <span
                                         className={`text-[12px] font-medium ${
                                           layer.id === 'shodan_overlay'
@@ -1370,7 +1348,7 @@ const WorldviewLeftPanel = React.memo(function WorldviewLeftPanel({
                                       >
                                         {lookupStaticUiText(layer.name, uiLanguage) || layer.name}
                                       </span>
-                                      <span className="text-[8px] text-[var(--text-muted)] font-mono tracking-wider mt-0.5">
+                                      <span className="text-[8px] text-[var(--text-muted)] font-mono tracking-wider">
                                         {layer.id === 'shodan_overlay'
                                           ? layer.source
                                           : (

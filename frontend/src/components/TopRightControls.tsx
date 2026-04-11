@@ -31,15 +31,12 @@ interface TopRightControlsProps {
   onTerminalToggle?: () => void;
   onInfonetToggle?: () => void;
   dmCount?: number;
-  onSettingsClick?: () => void;
-  onMeshChatNavigate?: (tab: 'infonet' | 'meshtastic' | 'dms') => void;
 }
 
 export default function TopRightControls({
   onTerminalToggle,
   onInfonetToggle,
   dmCount,
-  onMeshChatNavigate,
 }: TopRightControlsProps = {}) {
   const { uiLanguage, setUiLanguage } = useTheme();
   const [launcherOpen, setLauncherOpen] = useState(false);
@@ -664,7 +661,7 @@ export default function TopRightControls({
                     from the project root to ensure it is fully stopped.
                   </div>
                 </div>
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   <button
                     type="button"
                     onClick={() => void activateWormholeAndLaunchTerminal()}
@@ -676,17 +673,6 @@ export default function TopRightControls({
                       : terminalPrivateReady
                         ? 'ENTER WORMHOLE'
                         : 'ACTIVATE WORMHOLE'}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      closeTerminalLauncher();
-                      onMeshChatNavigate?.('meshtastic');
-                    }}
-                    disabled={terminalLaunchBusy}
-                    className="px-4 py-3 border border-[var(--border-primary)] hover:border-cyan-500/40 disabled:opacity-50 text-[13px] font-mono text-[var(--text-muted)] tracking-[0.16em]"
-                  >
-                    GO TO MESH
                   </button>
                   <button
                     type="button"

@@ -3,7 +3,7 @@
 import { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import dynamic from 'next/dynamic';
 import { motion } from 'framer-motion';
-import { ChevronLeft, ChevronRight, ChevronUp, ChevronDown } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ChevronUp, ChevronDown, Settings } from 'lucide-react';
 import WorldviewLeftPanel from '@/components/WorldviewLeftPanel';
 
 import NewsFeed from '@/components/NewsFeed';
@@ -15,11 +15,9 @@ import PredictionsPanel from '@/components/PredictionsPanel';
 import SettingsPanel from '@/components/SettingsPanel';
 import ScaleBar from '@/components/ScaleBar';
 import MeshTerminal from '@/components/MeshTerminal';
-import MeshChat from '@/components/MeshChat';
 import InfonetTerminal from '@/components/InfonetTerminal';
 import AiQaPanel from '@/components/AiQaPanel';
 import { leaveWormhole, fetchWormholeState } from '@/mesh/wormholeClient';
-import ShodanPanel from '@/components/ShodanPanel';
 import GlobalTicker from '@/components/GlobalTicker';
 import ErrorBoundary from '@/components/ErrorBoundary';
 import OnboardingModal, { useOnboarding } from '@/components/OnboardingModal';
@@ -33,7 +31,6 @@ import { useBackendStatus, useDataKey } from '@/hooks/useDataStore';
 import { useReverseGeocode } from '@/hooks/useReverseGeocode';
 import { useRegionDossier } from '@/hooks/useRegionDossier';
 import {
-  requestSecureMeshTerminalLauncherOpen,
   subscribeMeshTerminalOpen,
 } from '@/lib/meshTerminalLauncher';
 import {
@@ -333,11 +330,6 @@ export default function Dashboard() {
   const [terminalOpen, setTerminalOpen] = useState(false);
   const [terminalLaunchToken, setTerminalLaunchToken] = useState(0);
   const [infonetOpen, setInfonetOpen] = useState(false);
-  const [meshChatLaunchRequest, setMeshChatLaunchRequest] = useState<{
-    tab: 'infonet' | 'meshtastic' | 'dms';
-    gate?: string;
-    nonce: number;
-  } | null>(null);
   const [dmCount, setDmCount] = useState(0);
   const [mapView, setMapView] = useState({ zoom: 2, latitude: 20 });
   const [locateBarOpen, setLocateBarOpen] = useState(false);
@@ -351,10 +343,6 @@ export default function Dashboard() {
 
   const openInfonet = useCallback(() => {
     setInfonetOpen(true);
-  }, []);
-
-  const openSecureTerminalLauncher = useCallback(() => {
-    requestSecureMeshTerminalLauncherOpen('dashboard');
   }, []);
 
   useEffect(() => subscribeMeshTerminalOpen(openInfonet), [openInfonet]);
@@ -414,9 +402,8 @@ export default function Dashboard() {
     // Shodan
     shodan_overlay: false,
   });
-  const [shodanResults, setShodanResults] = useState<ShodanSearchMatch[]>([]);
-  const [, setShodanQueryLabel] = useState('');
-  const [shodanStyle, setShodanStyle] = useState<import('@/types/shodan').ShodanStyleConfig>({ shape: 'circle', color: '#16a34a', size: 'md' });
+  const [shodanResults] = useState<ShodanSearchMatch[]>([]);
+  const [shodanStyle] = useState<import('@/types/shodan').ShodanStyleConfig>({ shape: 'circle', color: '#16a34a', size: 'md' });
   useDataPolling();
   const backendStatus = useBackendStatus();
   const spaceWeather = useDataKey('space_weather');
@@ -455,19 +442,6 @@ export default function Dashboard() {
 
   // Left panel accordion state
   const [leftDataMinimized, setLeftDataMinimized] = useState(false);
-  const [leftMeshExpanded, setLeftMeshExpanded] = useState(true);
-  const [leftShodanMinimized, setLeftShodanMinimized] = useState(true);
-
-  const launchMeshChatTab = useCallback((tab: 'infonet' | 'meshtastic' | 'dms', gate?: string) => {
-    setLeftOpen(true);
-    setLeftMeshExpanded(true);
-    setMeshChatLaunchRequest({ tab, gate, nonce: Date.now() });
-  }, []);
-
-  const openLiveGateFromShell = useCallback((gate: string) => {
-    setInfonetOpen(false);
-    launchMeshChatTab('infonet', gate);
-  }, [launchMeshChatTab]);
 
   // Right panel: which panel is "focused" (expanded). null = none focused, all normal.
   const [rightFocusedPanel, setRightFocusedPanel] = useState<string | null>(null);
@@ -622,30 +596,31 @@ export default function Dashboard() {
               initial={{ opacity: 0, y: -20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 1 }}
-              className="absolute top-6 left-6 z-[200] pointer-events-none flex items-center gap-4 hud-zone"
+              className="absolute top-6 left-1/2 -translate-x-1/2 z-[200] pointer-events-none flex flex-col items-center gap-1 hud-zone text-center"
             >
-              <div className="w-8 h-8 flex items-center justify-center">
-                {/* Target Reticle Icon */}
-                <div className="w-6 h-6 rounded-full border border-cyan-500 relative flex items-center justify-center">
-                  <div className="w-4 h-4 rounded-full bg-cyan-500/30"></div>
-                  <div className="absolute top-[-2px] bottom-[-2px] w-[1px] bg-cyan-500"></div>
-                  <div className="absolute left-[-2px] right-[-2px] h-[1px] bg-cyan-500"></div>
-                </div>
-              </div>
-              <div className="flex flex-col">
-                <h1
-                  className="notranslate text-2xl font-bold tracking-[0.18em] text-[var(--text-primary)] text-glow"
-                  translate="no"
-                  lang="en"
-                  style={{ fontFamily: 'var(--font-roboto-mono), monospace' }}
-                >
-                  Shadow<span className="text-cyan-400">broker</span>
-                </h1>
-                <span className="text-[9px] text-[var(--text-muted)] font-mono tracking-[0.3em] mt-1 ml-1">
-                  全球威胁拦截
-                </span>
-              </div>
+              <h1
+                className="notranslate text-2xl font-bold tracking-[0.18em] text-[var(--text-primary)] text-glow"
+                translate="no"
+                lang="en"
+                style={{ fontFamily: 'var(--font-roboto-mono), monospace' }}
+              >
+                Shadow<span className="text-cyan-400">broker</span>
+              </h1>
+              <span className="text-[9px] text-[var(--text-muted)] font-mono tracking-[0.3em]">
+                全球威胁拦截
+              </span>
             </motion.div>
+
+            <div className="absolute top-6 right-6 z-[200] pointer-events-auto hud-zone">
+              <button
+                type="button"
+                onClick={() => setSettingsOpen(true)}
+                className="w-8 h-8 border border-[var(--border-primary)] bg-[var(--bg-primary)]/70 hover:border-cyan-500/50 flex items-center justify-center text-[var(--text-muted)] hover:text-cyan-300 transition-all hover:bg-[var(--hover-accent)]"
+                title="System Settings"
+              >
+                <Settings size={14} />
+              </button>
+            </div>
 
             {/* LEFT HUD CONTAINER — mirrors right side: one scroll container, scrollbar on LEFT edge */}
             <motion.div
@@ -661,7 +636,6 @@ export default function Dashboard() {
                     activeLayers={activeLayers}
                     setActiveLayers={setActiveLayers}
                     shodanResultCount={shodanResults.length}
-                    onSettingsClick={() => setSettingsOpen(true)}
                     gibsDate={gibsDate}
                     setGibsDate={setGibsDate}
                     gibsOpacity={gibsOpacity}
@@ -682,36 +656,6 @@ export default function Dashboard() {
                     onMinimizedChange={setLeftDataMinimized}
                   />
                 </ErrorBoundary>
-              </div>
-
-              {/* 2. MESH CHAT (Middle) */}
-              <div className="contents" style={{ direction: 'ltr' }}>
-                <MeshChat
-                  onFlyTo={handleFlyTo}
-                  expanded={leftMeshExpanded}
-                  onExpandedChange={setLeftMeshExpanded}
-                  onSettingsClick={() => setSettingsOpen(true)}
-                  onTerminalToggle={openSecureTerminalLauncher}
-                  launchRequest={meshChatLaunchRequest}
-                />
-              </div>
-
-              {/* 3. SHODAN CONNECTOR (Bottom) */}
-              <div className="contents" style={{ direction: 'ltr' }}>
-                <ShodanPanel
-                  currentResults={shodanResults}
-                  onOpenSettings={() => setSettingsOpen(true)}
-                  settingsOpen={settingsOpen}
-                  onResultsChange={(results, queryLabel) => {
-                    setShodanResults(results);
-                    setShodanQueryLabel(queryLabel);
-                    setActiveLayers((prev) => ({ ...prev, shodan_overlay: results.length > 0 }));
-                  }}
-                  onSelectEntity={setSelectedEntity}
-                  onStyleChange={setShodanStyle}
-                  isMinimized={leftShodanMinimized}
-                  onMinimizedChange={setLeftShodanMinimized}
-                />
               </div>
             </motion.div>
 
@@ -764,8 +708,6 @@ export default function Dashboard() {
               <TopRightControls
                 onTerminalToggle={openInfonet}
                 onInfonetToggle={toggleInfonet}
-                onSettingsClick={() => setSettingsOpen(true)}
-                onMeshChatNavigate={launchMeshChatTab}
                 dmCount={dmCount}
               />
 
@@ -1096,7 +1038,6 @@ export default function Dashboard() {
               })
               .catch(() => {});
           }}
-          onOpenLiveGate={openLiveGateFromShell}
         />
 
         {/* BACKEND DISCONNECTED BANNER */}

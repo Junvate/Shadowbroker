@@ -20,6 +20,7 @@ import HlsVideo, { type HlsVideoHandle } from '@/components/HlsVideo';
 import WikiImage from '@/components/WikiImage';
 import ExternalImage from '@/components/ExternalImage';
 import { useTheme } from '@/lib/ThemeContext';
+import { useUiTranslations } from '@/hooks/useUiTranslations';
 
 import {
   svgPlaneCyan,
@@ -645,6 +646,22 @@ const MaplibreViewer = ({
   const mapRef = useRef<MapRef>(null);
   const mapInitRef = useRef(false);
   const { theme, uiLanguage } = useTheme();
+  const selectedNewsItem = useMemo(() => {
+    if (selectedEntity?.type !== 'news' || !data?.news) return null;
+    return data.news.find((n: any) => {
+      const key = (n as any).alertKey || `${n.title}|${n.coords?.[0]},${n.coords?.[1]}`;
+      return key === selectedEntity.id;
+    }) as any;
+  }, [data?.news, selectedEntity]);
+  const selectedNewsTranslationInputs = useMemo(() => {
+    if (!selectedNewsItem) return [];
+    return [
+      String(selectedNewsItem.title || ''),
+      String(selectedNewsItem.machine_assessment || ''),
+      ...(((selectedNewsItem.articles as any[]) || []).map((sub) => String(sub?.title || ''))),
+    ];
+  }, [selectedNewsItem]);
+  const selectedNewsTranslations = useUiTranslations(selectedNewsTranslationInputs, uiLanguage);
   const mapThemeStyle = useMemo<maplibregl.StyleSpecification>(
     () => (theme === 'light' ? lightStyle : darkStyle) as maplibregl.StyleSpecification,
     [theme],
@@ -5238,11 +5255,7 @@ const MaplibreViewer = ({
 
         {/* ── THREAT INTERCEPT — fullscreen intelligence dossier modal ── */}
         {(() => {
-          if (selectedEntity?.type !== 'news' || !data?.news) return null;
-          const item = data.news.find((n: any) => {
-            const key = (n as any).alertKey || `${n.title}|${n.coords?.[0]},${n.coords?.[1]}`;
-            return key === selectedEntity.id;
-          }) as any;
+          const item = selectedNewsItem;
           if (!item) return null;
 
           const rs = item.risk_score ?? 0;
@@ -5269,6 +5282,9 @@ const MaplibreViewer = ({
           const articles = (item.articles as any[]) || [];
           const clusterCount = (item.cluster_count as number) || 1;
           const isBreaking = item.breaking === true;
+          const translatedTitle = selectedNewsTranslations[item.title] || item.title;
+          const translatedAssessment =
+            selectedNewsTranslations[item.machine_assessment] || item.machine_assessment;
 
           return (
             <div
@@ -5301,13 +5317,15 @@ const MaplibreViewer = ({
                   <div className="flex items-center gap-3">
                     <AlertTriangle size={18} className={threatColor} />
                     <span className={`text-[14px] tracking-[0.25em] font-bold ${threatColor}`}>
-                      {isBreaking ? 'BREAKING INTERCEPT' : 'THREAT INTERCEPT'}
+                      {isBreaking
+                        ? (uiLanguage === 'zh' ? '突发拦截' : 'BREAKING INTERCEPT')
+                        : (uiLanguage === 'zh' ? '威胁拦截' : 'THREAT INTERCEPT')}
                     </span>
-                    {isBreaking && <span className="text-[9px] bg-red-500 text-white px-2 py-0.5 rounded-sm font-bold animate-pulse">LIVE</span>}
+                    {isBreaking && <span className="text-[9px] bg-red-500 text-white px-2 py-0.5 rounded-sm font-bold animate-pulse">{uiLanguage === 'zh' ? '实时' : 'LIVE'}</span>}
                   </div>
                   <div className="flex items-center gap-3">
                     <span className={`text-[14px] ${threatColor} font-bold ${rs >= 8 ? 'animate-pulse' : ''}`}>
-                      ALERT LVL: {rs}/10
+                      {uiLanguage === 'zh' ? '告警 LVL' : 'ALERT LVL'}: {rs}/10
                     </span>
                     <button
                       onClick={() => onEntityClick?.(null)}
@@ -5324,12 +5342,12 @@ const MaplibreViewer = ({
                   {/* ── HEADLINE ── */}
                   <div className="px-5 pt-4 pb-3">
                     <h2 className={`text-[18px] font-bold leading-snug ${threatColor}`}>
-                      {item.title}
+                      {translatedTitle}
                     </h2>
                     <div className="flex items-center gap-3 mt-2 text-[11px] text-[var(--text-muted)]">
                       <span className="text-white font-bold text-[12px]">{item.source || 'UNKNOWN'}</span>
                       {item.published && <span>• {item.published}</span>}
-                      {clusterCount > 1 && <span className="text-cyan-400 font-bold">• {clusterCount} SOURCES REPORTING</span>}
+                      {clusterCount > 1 && <span className="text-cyan-400 font-bold">• {clusterCount} {uiLanguage === 'zh' ? '个来源同时报告' : 'SOURCES REPORTING'}</span>}
                       {item.coords && (
                         <span className="ml-auto text-[10px] font-mono text-[var(--text-muted)]">
                           {item.coords[0].toFixed(3)}°, {item.coords[1].toFixed(3)}°
@@ -5343,26 +5361,26 @@ const MaplibreViewer = ({
                     <div className="grid grid-cols-3 gap-2">
                       {/* Oracle Score */}
                       <div className={`border rounded p-3 text-center ${oTierBg || 'bg-black/40 border-cyan-800/30'}`}>
-                        <div className="text-[9px] text-[var(--text-muted)] tracking-[0.15em] mb-1.5">ORACLE SCORE</div>
+                        <div className="text-[9px] text-[var(--text-muted)] tracking-[0.15em] mb-1.5">{uiLanguage === 'zh' ? '预言机评分' : 'ORACLE SCORE'}</div>
                         <div className={`text-[28px] font-bold leading-none ${oTierColor || 'text-gray-500'}`}>
                           {oScore != null ? oScore.toFixed(1) : '—'}
                         </div>
-                        {oTier && <div className={`text-[10px] font-bold ${oTierColor} mt-1`}>{oTier}</div>}
+                        {oTier && <div className={`text-[10px] font-bold ${oTierColor} mt-1`}>{uiLanguage === 'zh' ? (oScore != null && oScore >= 8 ? '严重' : oScore != null && oScore >= 6 ? '升高' : oScore != null && oScore >= 4 ? '中等' : '低') : oTier}</div>}
                       </div>
                       {/* Sentiment */}
                       <div className={`border rounded p-3 text-center ${sentBg || 'bg-black/40 border-cyan-800/30'}`}>
-                        <div className="text-[9px] text-[var(--text-muted)] tracking-[0.15em] mb-1.5">SENTIMENT</div>
+                        <div className="text-[9px] text-[var(--text-muted)] tracking-[0.15em] mb-1.5">{uiLanguage === 'zh' ? '情感' : 'SENTIMENT'}</div>
                         <div className={`text-[28px] font-bold leading-none ${sentColor || 'text-gray-500'}`}>
                           {sent != null ? <>{sentArrow} {sent > 0 ? '+' : ''}{sent.toFixed(2)}</> : '—'}
                         </div>
-                        {sentLabel && <div className={`text-[10px] font-bold ${sentColor} mt-1`}>{sentLabel}</div>}
+                        {sentLabel && <div className={`text-[10px] font-bold ${sentColor} mt-1`}>{uiLanguage === 'zh' ? (sent != null && sent < -0.1 ? '负面' : sent != null && sent > 0.1 ? '正面' : '中性') : sentLabel}</div>}
                       </div>
                       {/* Threat Level */}
                       <div className={`border rounded p-3 text-center ${rs >= 8 ? 'bg-red-500/10 border-red-500/30' : rs >= 6 ? 'bg-orange-500/10 border-orange-500/30' : rs >= 4 ? 'bg-yellow-500/10 border-yellow-500/30' : 'bg-green-500/10 border-green-500/30'}`}>
-                        <div className="text-[9px] text-[var(--text-muted)] tracking-[0.15em] mb-1.5">RISK LEVEL</div>
+                        <div className="text-[9px] text-[var(--text-muted)] tracking-[0.15em] mb-1.5">{uiLanguage === 'zh' ? '风险等级' : 'RISK LEVEL'}</div>
                         <div className={`text-[28px] font-bold leading-none ${threatColor}`}>{rs}/10</div>
                         <div className={`text-[10px] font-bold ${threatColor} mt-1`}>
-                          {rs >= 9 ? 'CRITICAL' : rs >= 7 ? 'HIGH' : rs >= 4 ? 'MEDIUM' : 'LOW'}
+                          {uiLanguage === 'zh' ? (rs >= 9 ? '严重' : rs >= 7 ? '高' : rs >= 4 ? '中' : '低') : (rs >= 9 ? 'CRITICAL' : rs >= 7 ? 'HIGH' : rs >= 4 ? 'MEDIUM' : 'LOW')}
                         </div>
                       </div>
                     </div>
@@ -5373,7 +5391,7 @@ const MaplibreViewer = ({
                     <div className="px-5 pb-3">
                       <div className="bg-purple-950/30 border border-purple-500/40 rounded p-4">
                         <div className="text-[10px] text-purple-400 tracking-[0.2em] font-bold mb-2">
-                          PREDICTION MARKET ANALYSIS
+                          {uiLanguage === 'zh' ? '预测市场分析' : 'PREDICTION MARKET ANALYSIS'}
                         </div>
                         <div className="text-[14px] text-purple-200 font-bold leading-snug mb-3">
                           &quot;{pred.title}&quot;
@@ -5385,7 +5403,7 @@ const MaplibreViewer = ({
                             style={{ width: `${pred.consensus_pct}%` }}
                           />
                           <span className="absolute inset-0 flex items-center justify-center text-[14px] font-bold text-white drop-shadow-lg">
-                            {pred.consensus_pct}% CONSENSUS PROBABILITY
+                            {pred.consensus_pct}% {uiLanguage === 'zh' ? '共识概率' : 'CONSENSUS PROBABILITY'}
                           </span>
                         </div>
                         <div className="flex gap-6 text-[11px]">
@@ -5402,7 +5420,7 @@ const MaplibreViewer = ({
                             </div>
                           )}
                           {pred.match_score != null && (
-                            <span className="text-purple-400/40 ml-auto text-[10px]">headline match: {(pred.match_score * 100).toFixed(0)}%</span>
+                            <span className="text-purple-400/40 ml-auto text-[10px]">{uiLanguage === 'zh' ? '标题匹配' : 'headline match'}: {(pred.match_score * 100).toFixed(0)}%</span>
                           )}
                         </div>
                       </div>
@@ -5414,8 +5432,8 @@ const MaplibreViewer = ({
                     <div className="px-5 pb-3">
                       <div className="p-3 bg-black/60 border border-cyan-800/50 rounded text-[11px] text-cyan-400 font-mono leading-relaxed relative overflow-hidden">
                         <div className="absolute top-0 left-0 w-[3px] h-full bg-cyan-500 animate-pulse"></div>
-                        <span className="font-bold text-white text-[12px]">&gt;_ SYS.ANALYSIS: </span>
-                        <span className="text-cyan-300 opacity-90">{item.machine_assessment}</span>
+                        <span className="font-bold text-white text-[12px]">&gt;_ {uiLanguage === 'zh' ? '系统分析' : 'SYS.ANALYSIS'}: </span>
+                        <span className="text-cyan-300 opacity-90">{translatedAssessment}</span>
                       </div>
                     </div>
                   )}
@@ -5424,7 +5442,7 @@ const MaplibreViewer = ({
                   {articles.length > 1 && (
                     <div className="px-5 pb-3">
                       <div className="text-[10px] text-[var(--text-muted)] tracking-[0.2em] font-bold mb-2">
-                        CORROBORATING SOURCES ({articles.length})
+                        {uiLanguage === 'zh' ? `交叉印证来源（${articles.length}）` : `CORROBORATING SOURCES (${articles.length})`}
                       </div>
                       <div className="flex flex-col gap-1.5">
                         {articles.map((sub: any, si: number) => {
@@ -5442,11 +5460,11 @@ const MaplibreViewer = ({
                               <div className="flex-1 min-w-0">
                                 <div className="flex items-center gap-2 text-[10px]">
                                   <span className="text-white font-bold">{sub.source}</span>
-                                  <span className={`${subColor} font-bold`}>LVL: {subRs}/10</span>
+                                  <span className={`${subColor} font-bold`}>{uiLanguage === 'zh' ? '等级' : 'LVL'}: {subRs}/10</span>
                                   {sub.published && <span className="text-[var(--text-muted)] text-[9px]">{sub.published}</span>}
                                 </div>
                                 <div className="text-[11px] text-[var(--text-secondary)] leading-snug mt-0.5 group-hover:text-cyan-300 transition-colors">
-                                  {sub.title}
+                                  {selectedNewsTranslations[sub.title] || sub.title}
                                 </div>
                               </div>
                               <span className="text-[11px] text-cyan-500 group-hover:text-cyan-300 shrink-0 mt-1">↗</span>
@@ -5464,14 +5482,14 @@ const MaplibreViewer = ({
                         onClick={() => window.open(item.link, '_blank', 'noopener,noreferrer')}
                         className={`${threatColor} hover:text-white text-[12px] font-bold underline underline-offset-2 cursor-pointer`}
                       >
-                        VIEW FULL REPORT ↗
+                        {uiLanguage === 'zh' ? '查看完整报告 ↗' : 'VIEW FULL REPORT ↗'}
                       </button>
                     ) : <span />}
                     <button
                       onClick={() => onEntityClick?.(null)}
                       className="text-[11px] text-[var(--text-muted)] hover:text-white border border-[var(--border-primary)] hover:border-white/30 px-3 py-1 rounded transition-colors"
                     >
-                      CLOSE DOSSIER
+                      {uiLanguage === 'zh' ? '关闭档案' : 'CLOSE DOSSIER'}
                     </button>
                   </div>
                 </div>

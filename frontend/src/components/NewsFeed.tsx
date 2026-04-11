@@ -7,6 +7,7 @@ import React, { useEffect, useRef, useCallback } from 'react';
 import WikiImage from '@/components/WikiImage';
 import type { SelectedEntity, RegionDossier, FimiData } from "@/types/dashboard";
 import { useDataKeys } from '@/hooks/useDataStore';
+import { useUiTranslations } from '@/hooks/useUiTranslations';
 import { lookupShodanHost } from '@/lib/shodanClient';
 import type { ShodanHost } from '@/types/shodan';
 import { useTheme } from '@/lib/ThemeContext';
@@ -21,18 +22,33 @@ function formatTime(pubDate: string) {
     }
 }
 
-function zhThreatLevel(level: string | undefined): string {
+function threatLevelLabel(level: string | undefined, uiLanguage: 'zh' | 'en'): string {
     const value = String(level || '').toUpperCase();
-    if (value === 'SEVERE') return '严重';
-    if (value === 'HIGH') return '高';
-    if (value === 'ELEVATED') return '升高';
-    if (value === 'GUARDED') return '戒备';
-    if (value === 'LOW') return '低';
-    if (value === 'ROUTINE') return '常规';
-    return value || '未知';
+    if (uiLanguage === 'zh') {
+        if (value === 'SEVERE') return '严重';
+        if (value === 'HIGH') return '高';
+        if (value === 'ELEVATED') return '升高';
+        if (value === 'GUARDED') return '戒备';
+        if (value === 'LOW') return '低';
+        if (value === 'ROUTINE') return '常规';
+        return value || '未知';
+    }
+    return value || 'UNKNOWN';
 }
 
-function localizeAssessment(text: string): string {
+function localizeAssessment(text: string, uiLanguage: 'zh' | 'en'): string {
+    if (uiLanguage === 'en') {
+        return text
+            .replace(/系统分析/gi, 'SYS.ANALYSIS')
+            .replace(/预言机/gi, 'ORACLE')
+            .replace(/情绪/gi, 'SENTIMENT')
+            .replace(/严重/gi, 'CRITICAL')
+            .replace(/升高/gi, 'ELEVATED')
+            .replace(/常规/gi, 'ROUTINE')
+            .replace(/负向/gi, 'NEGATIVE')
+            .replace(/正向/gi, 'POSITIVE')
+            .replace(/中性/gi, 'NEUTRAL');
+    }
     return text
         .replace(/SYS\.ANALYSIS/gi, '系统分析')
         .replace(/\bORACLE\b/gi, '预言机')
@@ -43,6 +59,20 @@ function localizeAssessment(text: string): string {
         .replace(/\bNEGATIVE\b/gi, '负向')
         .replace(/\bPOSITIVE\b/gi, '正向')
         .replace(/\bNEUTRAL\b/gi, '中性');
+}
+
+function riskTierLabel(score: number, uiLanguage: 'zh' | 'en'): string {
+    if (uiLanguage === 'zh') {
+        return score >= 7 ? '严重' : score >= 4 ? '升高' : '常规';
+    }
+    return score >= 7 ? 'CRITICAL' : score >= 4 ? 'ELEVATED' : 'ROUTINE';
+}
+
+function sentimentToneLabel(sentiment: number, uiLanguage: 'zh' | 'en'): string {
+    if (uiLanguage === 'zh') {
+        return sentiment <= -0.05 ? '负向' : sentiment >= 0.05 ? '正向' : '中性';
+    }
+    return sentiment <= -0.05 ? 'NEGATIVE' : sentiment >= 0.05 ? 'POSITIVE' : 'NEUTRAL';
 }
 
 // ICAO type designator → Wikipedia article title
@@ -177,6 +207,11 @@ function NewsFeedInner({ selectedEntity, regionDossier, regionDossierLoading, on
 
     const news = data?.news || [];
     const fimi: FimiData | undefined = data?.fimi;
+    const newsTranslationInputs = useMemo(
+        () => news.flatMap((item: any) => [String(item?.title || ''), String(item?.machine_assessment || '')]),
+        [news],
+    );
+    const uiTranslations = useUiTranslations(newsTranslationInputs, uiLanguage);
 
     // Cross-reference: check if a news article title matches any FIMI disinfo keywords
     const fimiKeywords = useMemo(() => fimi?.disinfo_keywords || [], [fimi?.disinfo_keywords]);
@@ -921,6 +956,10 @@ function NewsFeedInner({ selectedEntity, regionDossier, regionDossierLoading, on
     if (selectedEntity?.type === 'liveuamap') {
         const item = data?.liveuamap?.find((l: any) => String(l.id) === String(selectedEntity.id));
         if (item) {
+            const translatedTitle = uiTranslations[item.title] || item.title;
+            const translatedAssessment = (item as any).machine_assessment
+                ? uiTranslations[(item as any).machine_assessment] || localizeAssessment((item as any).machine_assessment, uiLanguage)
+                : '';
             return (
                 <motion.div
                     initial={{ y: 50, opacity: 0 }}
@@ -965,6 +1004,10 @@ function NewsFeedInner({ selectedEntity, regionDossier, regionDossierLoading, on
     if (selectedEntity?.type === 'news') {
         const item = data?.news?.[selectedEntity.id as number];
         if (item) {
+            const translatedTitle = uiTranslations[item.title] || item.title;
+            const translatedAssessment = item.machine_assessment
+                ? uiTranslations[item.machine_assessment] || localizeAssessment(item.machine_assessment, uiLanguage)
+                : '';
             return (
                 <motion.div
                     initial={{ y: 50, opacity: 0 }}
@@ -974,9 +1017,9 @@ function NewsFeedInner({ selectedEntity, regionDossier, regionDossierLoading, on
                 >
                     <div className="p-3 border-b border-red-500/30 bg-red-950/40 flex justify-between items-center">
                         <h2 className="text-xs tracking-widest font-bold text-red-400 flex items-center gap-2">
-                            <AlertTriangle size={14} className="text-red-400" /> 威胁拦截
+                            <AlertTriangle size={14} className="text-red-400" /> {uiLanguage === 'zh' ? '威胁拦截' : 'THREAT INTERCEPT'}
                         </h2>
-                        <span className="text-[10px] text-[var(--text-muted)] font-mono">等级: {item.risk_score}/10</span>
+                        <span className="text-[10px] text-[var(--text-muted)] font-mono">{uiLanguage === 'zh' ? '等级' : 'LEVEL'}: {item.risk_score}/10</span>
                     </div>
 
                     <div className="p-4 flex flex-col gap-3">
@@ -986,13 +1029,13 @@ function NewsFeedInner({ selectedEntity, regionDossier, regionDossierLoading, on
                         </div>
                         <div className="flex flex-col gap-2 border-b border-[var(--border-primary)] pb-2">
                             <span className="text-[var(--text-muted)] text-[10px]">HEADLINE</span>
-                            <span className="text-red-400 text-xs font-bold leading-tight">{item.title}</span>
+                            <span className="text-red-400 text-xs font-bold leading-tight">{translatedTitle}</span>
                         </div>
                         {item.oracle_score != null && (
                             <div className="flex justify-between items-center border-b border-[var(--border-primary)] pb-2">
                                 <span className="text-[var(--text-muted)] text-[10px]">ORACLE SCORE</span>
                                 <span className={`text-xs font-bold ${item.oracle_score >= 7 ? 'text-red-400' : item.oracle_score >= 4 ? 'text-yellow-400' : 'text-green-400'}`}>
-                                    {item.oracle_score}/10 [{item.oracle_score >= 7 ? '严重' : item.oracle_score >= 4 ? '升高' : '常规'}]
+                                    {item.oracle_score}/10 [{riskTierLabel(item.oracle_score, uiLanguage)}]
                                 </span>
                             </div>
                         )}
@@ -1000,7 +1043,7 @@ function NewsFeedInner({ selectedEntity, regionDossier, regionDossierLoading, on
                             <div className="flex justify-between items-center border-b border-[var(--border-primary)] pb-2">
                                 <span className="text-[var(--text-muted)] text-[10px]">SENTIMENT</span>
                                 <span className={`text-xs font-bold ${item.sentiment <= -0.05 ? 'text-red-400' : item.sentiment >= 0.05 ? 'text-green-400' : 'text-gray-400'}`}>
-                                    {item.sentiment > 0 ? '+' : ''}{item.sentiment.toFixed(2)} [{item.sentiment <= -0.05 ? '负向' : item.sentiment >= 0.05 ? '正向' : '中性'}]
+                                    {item.sentiment > 0 ? '+' : ''}{item.sentiment.toFixed(2)} [{sentimentToneLabel(item.sentiment, uiLanguage)}]
                                 </span>
                             </div>
                         )}
@@ -1020,15 +1063,15 @@ function NewsFeedInner({ selectedEntity, regionDossier, regionDossierLoading, on
                         {item.machine_assessment && (
                             <div className="mt-2 p-2 bg-black/60 border border-cyan-800/50 rounded-sm text-[9px] text-cyan-400 font-mono leading-tight relative overflow-hidden shadow-[inset_0_0_10px_rgba(0,255,255,0.05)]">
                                 <div className="absolute top-0 left-0 w-[2px] h-full bg-cyan-500 animate-pulse"></div>
-                                <span className="font-bold text-white">&gt;_ 系统分析: </span>
-                                <span className="text-cyan-300 opacity-90">{localizeAssessment(item.machine_assessment)}</span>
+                                <span className="font-bold text-white">&gt;_ {uiLanguage === 'zh' ? '系统分析' : 'SYS.ANALYSIS'}: </span>
+                                <span className="text-cyan-300 opacity-90">{translatedAssessment}</span>
                             </div>
                         )}
                         {item.link && (
                             <div className="flex justify-between items-center pb-2 mt-2">
                                 <span className="text-[var(--text-muted)] text-[10px]">REFERENCE</span>
                                 <a href={item.link} target="_blank" rel="noreferrer" className="text-red-400 hover:text-red-300 text-xs font-bold underline">
-                                    View Source Article
+                                    {uiLanguage === 'zh' ? '查看完整报告 ↗' : 'View Source Article ↗'}
                                 </a>
                             </div>
                         )}
@@ -1090,7 +1133,7 @@ function NewsFeedInner({ selectedEntity, regionDossier, regionDossierLoading, on
             >
                 <div className="flex justify-between items-center relative z-10">
                     <h2 className="text-xs tracking-widest font-bold text-cyan-400 flex items-center gap-2">
-                        <AlertTriangle size={14} /> 全球威胁拦截
+                        <AlertTriangle size={14} /> {uiLanguage === 'zh' ? '全球威胁拦截' : 'GLOBAL THREAT INTERCEPT'}
                     </h2>
                     <button className="text-cyan-500 hover:text-[var(--text-primary)] transition-colors">
                         {isMinimized ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
@@ -1105,8 +1148,8 @@ function NewsFeedInner({ selectedEntity, regionDossier, regionDossierLoading, on
                             exit={{ height: 0, opacity: 0 }}
                             className="text-[10px] text-cyan-500/80 mt-1 flex items-center justify-between font-bold relative z-10"
                         >
-                            <span className="px-1 border border-cyan-500/30">系统状态：监控中</span>
-                            <span className="flex items-center gap-1"><Clock size={10} /> {data?.last_updated ? formatTime(data.last_updated) : "扫描中"}</span>
+                            <span className="px-1 border border-cyan-500/30">{uiLanguage === 'zh' ? '系统状态：监控中' : 'SYSTEM STATUS: MONITORING'}</span>
+                            <span className="flex items-center gap-1"><Clock size={10} /> {data?.last_updated ? formatTime(data.last_updated) : (uiLanguage === 'zh' ? "扫描中" : 'SCANNING')}</span>
                         </motion.div>
                     )}
                 </AnimatePresence>
@@ -1134,7 +1177,7 @@ function NewsFeedInner({ selectedEntity, regionDossier, regionDossierLoading, on
                                 data.threat_level.level === 'SEVERE' || data.threat_level.level === 'HIGH' ? 'animate-pulse' : ''
                             }`} style={{ backgroundColor: data.threat_level.color }} />
                             <span className="text-[9px] font-bold tracking-wider" style={{ color: data.threat_level.color }}>
-                                威胁：{zhThreatLevel(data.threat_level.level)}
+                                {uiLanguage === 'zh' ? '威胁' : 'THREAT'}: {threatLevelLabel(data.threat_level.level, uiLanguage)}
                             </span>
                             <span className="text-[9px] text-[var(--text-muted)] ml-auto">
                                 {data.threat_level.score}/100
@@ -1363,14 +1406,14 @@ function NewsFeedInner({ selectedEntity, regionDossier, regionDossierLoading, on
                                         onClick={() => onArticleClick?.(idx, item.coords?.[0], item.coords?.[1])}
                                         className={`text-left text-[11px] ${titleClass} hover:text-[var(--text-primary)] transition-colors leading-tight cursor-pointer`}
                                     >
-                                        {item.title}
+                                            {uiTranslations[item.title] || item.title}
                                     </button>
 
                                     {item.machine_assessment && (
                                         <div className="mt-1 p-1.5 bg-black/60 border border-cyan-800/50 rounded-sm text-[8.5px] text-cyan-400 font-mono leading-tight relative overflow-hidden shadow-[inset_0_0_10px_rgba(0,255,255,0.05)]">
                                             <div className="absolute top-0 left-0 w-[2px] h-full bg-cyan-500 animate-pulse"></div>
-                                            <span className="font-bold text-white">&gt;_ 系统分析: </span>
-                                            <span className="text-cyan-300 opacity-90">{localizeAssessment(item.machine_assessment)}</span>
+                                            <span className="font-bold text-white">&gt;_ {uiLanguage === 'zh' ? '系统分析' : 'SYS.ANALYSIS'}: </span>
+                                            <span className="text-cyan-300 opacity-90">{uiTranslations[item.machine_assessment] || localizeAssessment(item.machine_assessment, uiLanguage)}</span>
                                         </div>
                                     )}
                                     {item.prediction_odds && item.prediction_odds.consensus_pct != null && (
@@ -1383,7 +1426,7 @@ function NewsFeedInner({ selectedEntity, regionDossier, regionDossierLoading, on
 
                                     <div className="flex items-center gap-1.5 mt-1 relative z-10 flex-wrap">
                                         <span className={`text-[8px] font-bold font-mono px-1.5 py-0.5 rounded-sm border ${badgeClass}`}>
-                                            {isBreaking ? '突发' : `等级: ${item.risk_score}/10`}
+                                            {isBreaking ? (uiLanguage === 'zh' ? '突发' : 'BREAKING') : `${uiLanguage === 'zh' ? '等级' : 'LEVEL'}: ${item.risk_score}/10`}
                                         </span>
                                         {item.sentiment != null && (
                                             <span className={`text-[8px] font-bold font-mono px-1.5 py-0.5 rounded-sm border ${
