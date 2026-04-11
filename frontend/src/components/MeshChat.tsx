@@ -23,6 +23,7 @@ import {
 } from 'lucide-react';
 import { API_BASE } from '@/lib/api';
 import { controlPlaneJson } from '@/lib/controlPlane';
+import { useTheme } from '@/lib/ThemeContext';
 import { useGateSSE } from '@/hooks/useGateSSE';
 import { requestSecureMeshTerminalLauncherOpen } from '@/lib/meshTerminalLauncher';
 import {
@@ -727,6 +728,7 @@ const MeshChat = React.memo(function MeshChat({
   onTerminalToggle,
   launchRequest,
 }: MeshChatProps) {
+  const { uiLanguage } = useTheme();
   useEffect(() => {
     void migrateLegacyNodeIds().catch((err) => {
       console.warn('[mesh] legacy node-id migration failed in MeshChat', err);
@@ -763,6 +765,81 @@ const MeshChat = React.memo(function MeshChat({
   const [publicMeshAddress, setPublicMeshAddress] = useState('');
   const [meshView, setMeshView] = useState<'channel' | 'inbox'>('channel');
   const [meshDirectTarget, setMeshDirectTarget] = useState('');
+  const formatMeshRegion = useCallback(
+    (region: string) => {
+      const raw = String(region || '').trim();
+      if (!/^[A-Z]{2}$/.test(raw)) return raw;
+      try {
+        return (
+          new Intl.DisplayNames([uiLanguage === 'zh' ? 'zh-CN' : 'en'], { type: 'region' }).of(raw) ||
+          raw
+        );
+      } catch {
+        return raw;
+      }
+    },
+    [uiLanguage],
+  );
+  const meshUi = useMemo(
+    () => ({
+      title: uiLanguage === 'zh' ? '网状通信' : 'MESH CHAT',
+      infonetTab: uiLanguage === 'zh' ? '内网' : 'INFONET',
+      meshTab: uiLanguage === 'zh' ? '网状' : 'MESH',
+      deadDropTab: uiLanguage === 'zh' ? '死信箱' : 'DEAD DROP',
+      channel: uiLanguage === 'zh' ? '频道' : 'CHANNEL',
+      inbox: uiLanguage === 'zh' ? '收件箱' : 'INBOX',
+      noPublicMeshAddress: uiLanguage === 'zh' ? '无公网网状地址' : 'No public mesh address',
+      addressPrefix: uiLanguage === 'zh' ? '地址' : 'ADDR',
+      noChannelMessages: (region: string, channel: string) =>
+        uiLanguage === 'zh'
+          ? `暂无来自 ${formatMeshRegion(region)} / ${channel} 的消息`
+          : `No messages from ${formatMeshRegion(region)} / ${channel}`,
+      noPublicDirectIdentity:
+        uiLanguage === 'zh'
+          ? '请先创建或加载公网 Mesh 身份，才能查看 Meshtastic 直连消息。'
+          : 'Create or load a public mesh identity first to view Meshtastic direct messages.',
+      noPublicDirectMessages: (address: string) =>
+        uiLanguage === 'zh'
+          ? `暂无发往 ${address.toUpperCase()} 的公网直连消息。`
+          : `No public direct messages for ${address.toUpperCase()}.`,
+      statusPrivateInfonet: (gate: string, transportReady: boolean) =>
+        uiLanguage === 'zh'
+          ? `→ 内网${gate ? ` / ${gate}` : ''}${transportReady ? '' : ' / 实验加密'}`
+          : `→ INFONET${gate ? ` / ${gate}` : ''}${transportReady ? '' : ' / EXPERIMENTAL ENCRYPTION'}`,
+      statusPrivateLocked: uiLanguage === 'zh' ? '→ 私有通道已锁定' : '→ PRIVATE LANE LOCKED',
+      statusMeshDirect: (target: string) =>
+        uiLanguage === 'zh'
+          ? `→ 网状 / 发往 ${target.toUpperCase()}`
+          : `→ MESH / TO ${target.toUpperCase()}`,
+      statusMeshChannel: (region: string, channel: string) =>
+        uiLanguage === 'zh'
+          ? `→ 网状 / ${formatMeshRegion(region)} / ${channel}`
+          : `→ MESH / ${formatMeshRegion(region)} / ${channel}`,
+      statusMeshLocked: uiLanguage === 'zh' ? '→ 网状已锁定' : '→ MESH LOCKED',
+      statusDeadDropLocked: uiLanguage === 'zh' ? '→ 死信箱已锁定' : '→ DEAD DROP LOCKED',
+      statusDeadDropTarget: (target: string) =>
+        uiLanguage === 'zh' ? `→ 死信箱 / ${target.slice(0, 14)}` : `→ DEAD DROP / ${target.slice(0, 14)}`,
+      statusSelectTarget: uiLanguage === 'zh' ? '→ 选择目标' : '→ SELECT TARGET',
+      publicMeshKeyHint:
+        uiLanguage === 'zh'
+          ? '公网 Mesh 发言需要密钥，一键即可生成新地址。'
+          : 'Public mesh posting needs a key. One tap mints a new address.',
+      unlockInfonet: uiLanguage === 'zh' ? '解锁内网' : 'UNLOCK INFONET',
+      openPrivateBrief: uiLanguage === 'zh' ? '打开私有通道说明' : 'OPEN PRIVATE BRIEF',
+      unlockDeadDrop: uiLanguage === 'zh' ? '解锁死信箱' : 'UNLOCK DEAD DROP',
+      wormholeRequired: uiLanguage === 'zh' ? '需要虫洞' : 'WORMHOLE REQUIRED',
+      gettingMeshKey: uiLanguage === 'zh' ? '正在获取 Mesh 密钥' : 'GETTING MESH KEY',
+      leaveWormholeForMesh: uiLanguage === 'zh' ? '为 Mesh 关闭虫洞' : 'TURN OFF WORMHOLE FOR MESH',
+      getMeshKey: uiLanguage === 'zh' ? '获取 Mesh 密钥' : 'GET MESH KEY',
+      working: uiLanguage === 'zh' ? '处理中...' : 'WORKING...',
+      autoFix: uiLanguage === 'zh' ? '自动修复' : 'AUTO FIX',
+      oneTapDone: uiLanguage === 'zh' ? '一键完成' : 'ONE TAP',
+      sendDirectTo: (target: string) =>
+        uiLanguage === 'zh' ? `直发到 ${target.toUpperCase()}` : `DIRECT TO ${target.toUpperCase()}`,
+      backToChannel: uiLanguage === 'zh' ? '返回频道' : 'BACK TO CHANNEL',
+    }),
+    [formatMeshRegion, uiLanguage],
+  );
 
   // Identity
   const [identity, setIdentity] = useState<NodeIdentity | null>(null);
@@ -3917,7 +3994,7 @@ const MeshChat = React.memo(function MeshChat({
           <div className="flex items-center gap-2">
             <span className="text-cyan-800/50 font-mono text-[13px] select-none">──</span>
             <span className="text-[12px] text-cyan-400/90 font-mono tracking-widest" style={{ textShadow: '0 0 8px rgba(34,211,238,0.3)' }}>
-              网状通信
+              {meshUi.title}
             </span>
             <span className="text-cyan-800/50 font-mono text-[13px] select-none overflow-hidden whitespace-nowrap flex-1">──────────────────────────────</span>
           </div>
@@ -3942,11 +4019,11 @@ const MeshChat = React.memo(function MeshChat({
             {/* TAB BAR */}
             <div className="flex border-b border-[var(--border-primary)]/50 shrink-0">
               {[
-                { key: 'infonet' as Tab, label: '内网', icon: <Shield size={10} />, badge: 0 },
-                { key: 'meshtastic' as Tab, label: '网状', icon: <Radio size={10} />, badge: 0 },
+                { key: 'infonet' as Tab, label: meshUi.infonetTab, icon: <Shield size={10} />, badge: 0 },
+                { key: 'meshtastic' as Tab, label: meshUi.meshTab, icon: <Radio size={10} />, badge: 0 },
                 {
                   key: 'dms' as Tab,
-                  label: '死信箱',
+                  label: meshUi.deadDropTab,
                   icon: <Lock size={10} />,
                   badge: totalDmNotify,
                 },
@@ -4580,7 +4657,7 @@ const MeshChat = React.memo(function MeshChat({
                             : 'border-[var(--border-primary)]/40 text-[var(--text-muted)] hover:text-green-300'
                         }`}
                       >
-                        频道
+                        {meshUi.channel}
                       </button>
                       <button
                         onClick={() => setMeshView('inbox')}
@@ -4590,29 +4667,29 @@ const MeshChat = React.memo(function MeshChat({
                             : 'border-[var(--border-primary)]/40 text-[var(--text-muted)] hover:text-amber-300'
                         }`}
                       >
-                        收件箱
+                        {meshUi.inbox}
                       </button>
                     </div>
                     <div className="text-[10px] font-mono text-[var(--text-muted)] truncate">
-                      {publicMeshAddress ? `地址 ${publicMeshAddress.toUpperCase()}` : '无公网网状地址'}
+                      {publicMeshAddress ? `${meshUi.addressPrefix} ${publicMeshAddress.toUpperCase()}` : meshUi.noPublicMeshAddress}
                     </div>
                   </div>
                   <div className="flex-1 overflow-y-auto styled-scrollbar px-3 py-1.5 border-l-2 border-cyan-800/25">
                     {meshView === 'channel' && filteredMeshMessages.length === 0 && (
                       <div className="text-[12px] font-mono text-[var(--text-muted)] text-center py-4 leading-[1.65]">
-                        暂无来自 {meshRegion} / {meshChannel} 的消息
+                        {meshUi.noChannelMessages(meshRegion, meshChannel)}
                       </div>
                     )}
                     {meshView === 'inbox' && (
                       <>
                         {!publicMeshAddress && (
                           <div className="text-[12px] font-mono text-[var(--text-muted)] text-center py-4 leading-[1.65]">
-                            请先创建或加载公网 Mesh 身份，才能查看 Meshtastic 直连消息。
+                            {meshUi.noPublicDirectIdentity}
                           </div>
                         )}
                         {publicMeshAddress && meshInboxMessages.length === 0 && (
                           <div className="text-[12px] font-mono text-[var(--text-muted)] text-center py-4 leading-[1.65]">
-                            暂无发往 {publicMeshAddress.toUpperCase()} 的公网直连消息。
+                            {meshUi.noPublicDirectMessages(publicMeshAddress)}
                           </div>
                         )}
                         {meshInboxMessages.map((m, i) => (
@@ -5325,19 +5402,19 @@ const MeshChat = React.memo(function MeshChat({
                   <span className="text-[11px] font-mono tracking-widest text-[var(--text-muted)] uppercase">
                     {activeTab === 'infonet'
                       ? privateInfonetReady
-                        ? `→ 内网${selectedGate ? ` / ${selectedGate}` : ''}${privateInfonetTransportReady ? '' : ' / 实验加密'}`
-                        : '→ 私有通道已锁定'
+                        ? meshUi.statusPrivateInfonet(selectedGate, privateInfonetTransportReady)
+                        : meshUi.statusPrivateLocked
                       : activeTab === 'meshtastic'
                         ? hasPublicLaneIdentity
                           ? meshDirectTarget
-                            ? `→ 网状 / 发往 ${meshDirectTarget.toUpperCase()}`
-                            : `→ 网状 / ${meshRegion} / ${meshChannel}`
-                          : '→ 网状已锁定'
+                            ? meshUi.statusMeshDirect(meshDirectTarget)
+                            : meshUi.statusMeshChannel(meshRegion, meshChannel)
+                          : meshUi.statusMeshLocked
                         : activeTab === 'dms' && secureDmBlocked
-                          ? '→ 死信箱已锁定'
-                        : dmView === 'chat' && selectedContact
-                          ? `→ 死信箱 / ${selectedContact.slice(0, 14)}`
-                          : '→ 选择目标'}
+                          ? meshUi.statusDeadDropLocked
+                          : dmView === 'chat' && selectedContact
+                          ? meshUi.statusDeadDropTarget(selectedContact)
+                          : meshUi.statusSelectTarget}
                   </span>
                 )}
               </div>
@@ -5354,7 +5431,7 @@ const MeshChat = React.memo(function MeshChat({
                   {meshQuickStatus?.text ||
                     (publicMeshBlockedByWormhole
                       ? 'Wormhole is active. Turn it off here and we will mint a separate public mesh key for you.'
-                      : '公网 Mesh 发言需要密钥，一键即可生成新地址。')}
+                      : meshUi.publicMeshKeyHint)}
                 </div>
               )}
               <div className="flex items-center gap-2 px-3 pb-2 pt-1">
@@ -5365,10 +5442,10 @@ const MeshChat = React.memo(function MeshChat({
                   >
                     <span className="inline-flex items-center gap-2 text-sm font-mono tracking-[0.2em]">
                       <Shield size={11} />
-                      解锁内网
+                      {meshUi.unlockInfonet}
                     </span>
                     <span className="text-[12px] font-mono text-cyan-300/70">
-                      打开私有通道说明
+                      {meshUi.openPrivateBrief}
                     </span>
                   </button>
                 ) : activeTab === 'dms' && secureDmBlocked ? (
@@ -5378,10 +5455,10 @@ const MeshChat = React.memo(function MeshChat({
                   >
                     <span className="inline-flex items-center gap-2 text-sm font-mono tracking-[0.2em]">
                       <Lock size={11} />
-                      解锁死信箱
+                      {meshUi.unlockDeadDrop}
                     </span>
                     <span className="text-[12px] font-mono text-cyan-300/70">
-                      需要虫洞
+                      {meshUi.wormholeRequired}
                     </span>
                   </button>
                 ) : activeTab === 'meshtastic' && !hasPublicLaneIdentity ? (
@@ -5399,17 +5476,17 @@ const MeshChat = React.memo(function MeshChat({
                     <span className="inline-flex items-center gap-2 text-sm font-mono tracking-[0.2em]">
                       <Radio size={11} />
                       {identityWizardBusy
-                        ? '正在获取 Mesh 密钥'
+                        ? meshUi.gettingMeshKey
                         : publicMeshBlockedByWormhole
-                          ? '为 Mesh 关闭虫洞'
-                          : '获取 Mesh 密钥'}
+                          ? meshUi.leaveWormholeForMesh
+                          : meshUi.getMeshKey}
                     </span>
                     <span className="text-[12px] font-mono text-green-300/70">
                       {identityWizardBusy
-                        ? '处理中...'
+                        ? meshUi.working
                         : publicMeshBlockedByWormhole
-                          ? '自动修复'
-                          : '一键完成'}
+                          ? meshUi.autoFix
+                          : meshUi.oneTapDone}
                     </span>
                   </button>
                 ) : activeTab === 'meshtastic' && meshDirectTarget ? (
@@ -5419,9 +5496,9 @@ const MeshChat = React.memo(function MeshChat({
                   >
                     <span className="inline-flex items-center gap-2 text-sm font-mono tracking-[0.2em]">
                       <Send size={11} />
-                      直发到 {meshDirectTarget.toUpperCase()}
+                      {meshUi.sendDirectTo(meshDirectTarget)}
                     </span>
-                    <span className="text-[12px] font-mono text-amber-200/70">返回频道</span>
+                    <span className="text-[12px] font-mono text-amber-200/70">{meshUi.backToChannel}</span>
                   </button>
                 ) : activeTab === 'infonet' &&
                   privateInfonetReady &&

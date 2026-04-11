@@ -8,6 +8,10 @@
     "dev:start": "bash ./dev-daemon-start.sh",
     "dev:restart": "bash ./dev-daemon-restart.sh",
     "dev:stop": "bash ./dev-daemon-stop.sh",
-    "dev:logs": "tail -f ./.dev-daemon/dev.log"
+    "dev:logs": "tail -f ./.dev-daemon/dev.log",
+    "stable:start": "bash ./stable-daemon-start.sh",
+    "stable:restart": "bash ./stable-daemon-restart.sh",
+    "stable:stop": "bash ./stable-daemon-stop.sh",
+    "stable:logs": "tail -f ./.stable-daemon/app.log"
   }
 }

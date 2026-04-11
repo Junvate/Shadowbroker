@@ -6,6 +6,7 @@ const backendDir = path.resolve(__dirname, "backend");
 const backendHost = String(process.env.BACKEND_HOST || "0.0.0.0");
 const backendPort = String(process.env.BACKEND_PORT || "8000");
 const repoRoot = __dirname;
+const npmCmd = process.platform === "win32" ? "npm.cmd" : "npm";
 const pythonCandidates = process.platform === "win32"
   ? [
       path.join(backendDir, "venv", "Scripts", "python.exe"),
@@ -63,6 +64,28 @@ function buildVenvEnv(pythonPath) {
   };
 }
 
+async function ensureBackendNodeDeps() {
+  const backendPkg = path.join(backendDir, "package.json");
+  const wsPkg = path.join(backendDir, "node_modules", "ws", "package.json");
+  if (!fs.existsSync(backendPkg) || fs.existsSync(wsPkg)) {
+    return;
+  }
+
+  console.log("[*] Backend Node.js deps missing, installing backend/package.json dependencies...");
+  try {
+    await runSyncChecked(
+      npmCmd,
+      ["install", "--no-fund", "--no-audit"],
+      backendDir,
+      "backend npm install",
+    );
+  } catch (error) {
+    console.warn(
+      `[!] Backend Node.js dependency install failed; AIS proxy may stay degraded. ${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
+}
+
 async function ensureBackendRuntime() {
   if (await hasBackendRuntime(venvBin)) {
     return;
@@ -94,6 +117,7 @@ if (["1", "true", "yes"].includes(String(process.env.BACKEND_RELOAD || "").toLow
 }
 
 async function main() {
+  await ensureBackendNodeDeps();
   await ensureBackendRuntime();
   console.log(`[*] Starting backend with: ${venvBin} ${backendArgs.join(" ")}`);
   const backendProc = spawn(venvBin, backendArgs, {

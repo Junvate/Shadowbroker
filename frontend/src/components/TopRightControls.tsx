@@ -10,6 +10,7 @@ import {
   Terminal,
   Server,
 } from 'lucide-react';
+import { controlPlaneFetch } from '@/lib/controlPlane';
 import {
   requestMeshTerminalOpen,
   subscribeSecureMeshTerminalLauncherOpen,

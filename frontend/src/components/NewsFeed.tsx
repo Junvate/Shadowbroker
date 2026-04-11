@@ -9,6 +9,7 @@ import type { SelectedEntity, RegionDossier, FimiData } from "@/types/dashboard"
 import { useDataKeys } from '@/hooks/useDataStore';
 import { lookupShodanHost } from '@/lib/shodanClient';
 import type { ShodanHost } from '@/types/shodan';
+import { useTheme } from '@/lib/ThemeContext';
 
 // Format time from pubish string "Tue, 24 Feb 2026 15:30:00 GMT" to "15:30"
 function formatTime(pubDate: string) {
@@ -149,6 +150,10 @@ const VESSEL_TYPE_WIKI: Record<string, string> = {
 };
 
 function NewsFeedInner({ selectedEntity, regionDossier, regionDossierLoading, onArticleClick }: { selectedEntity?: SelectedEntity | null, regionDossier?: RegionDossier | null, regionDossierLoading?: boolean, onArticleClick?: (idx: number, lat?: number, lng?: number) => void }) {
+    const { uiLanguage } = useTheme();
+    const squawkLabel = uiLanguage === 'zh' ? '应答机代码' : 'Transponder Code';
+    const emergencySuffix = uiLanguage === 'zh' ? ' ⚠ 紧急情况' : ' ⚠ EMERGENCY';
+    const commsLostSuffix = uiLanguage === 'zh' ? ' 通讯失联' : ' COMMS LOST';
     const data = useDataKeys([
       'news', 'fimi', 'commercial_flights', 'private_flights', 'private_jets',
       'military_flights', 'tracked_flights', 'ships', 'gdelt', 'liveuamap',
@@ -539,8 +544,8 @@ function NewsFeedInner({ selectedEntity, regionDossier, regionDossierLoading, on
                         </div>
                         {flight.squawk && (
                             <div className="flex justify-between items-center border-b border-[var(--border-primary)] pb-2">
-                                <span className="text-[var(--text-muted)] text-[10px]">SQUAWK</span>
-                                <span className={`text-xs font-bold ${flight.squawk === '7700' ? 'text-red-400 animate-pulse' : flight.squawk === '7600' ? 'text-yellow-400' : 'text-[var(--text-primary)]'}`}>{flight.squawk}{flight.squawk === '7700' ? ' ⚠ EMERGENCY' : flight.squawk === '7600' ? ' COMMS LOST' : ''}</span>
+                                <span className="text-[var(--text-muted)] text-[10px]">{squawkLabel}</span>
+                                <span className={`text-xs font-bold ${flight.squawk === '7700' ? 'text-red-400 animate-pulse' : flight.squawk === '7600' ? 'text-yellow-400' : 'text-[var(--text-primary)]'}`}>{flight.squawk}{flight.squawk === '7700' ? emergencySuffix : flight.squawk === '7600' ? commsLostSuffix : ''}</span>
                             </div>
                         )}
                         <div className="border-b border-[var(--border-primary)] pb-2">
@@ -705,8 +710,8 @@ function NewsFeedInner({ selectedEntity, regionDossier, regionDossierLoading, on
                         </div>
                         {flight.squawk && (
                             <div className="flex justify-between items-center border-b border-[var(--border-primary)] pb-2">
-                                <span className="text-[var(--text-muted)] text-[10px]">SQUAWK</span>
-                                <span className={`text-xs font-bold ${flight.squawk === '7700' ? 'text-red-400 animate-pulse' : flight.squawk === '7600' ? 'text-yellow-400' : 'text-[var(--text-primary)]'}`}>{flight.squawk}{flight.squawk === '7700' ? ' ⚠ EMERGENCY' : flight.squawk === '7600' ? ' COMMS LOST' : ''}</span>
+                                <span className="text-[var(--text-muted)] text-[10px]">{squawkLabel}</span>
+                                <span className={`text-xs font-bold ${flight.squawk === '7700' ? 'text-red-400 animate-pulse' : flight.squawk === '7600' ? 'text-yellow-400' : 'text-[var(--text-primary)]'}`}>{flight.squawk}{flight.squawk === '7700' ? emergencySuffix : flight.squawk === '7600' ? commsLostSuffix : ''}</span>
                             </div>
                         )}
                         <div className="flex justify-between items-center border-b border-[var(--border-primary)] pb-2">

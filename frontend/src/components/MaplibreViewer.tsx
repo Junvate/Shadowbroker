@@ -644,7 +644,7 @@ const MaplibreViewer = ({
   const data = useDataSnapshot() as import('@/types/dashboard').DashboardData;
   const mapRef = useRef<MapRef>(null);
   const mapInitRef = useRef(false);
-  const { theme } = useTheme();
+  const { theme, uiLanguage } = useTheme();
   const mapThemeStyle = useMemo<maplibregl.StyleSpecification>(
     () => (theme === 'light' ? lightStyle : darkStyle) as maplibregl.StyleSpecification,
     [theme],
@@ -3865,7 +3865,7 @@ const MaplibreViewer = ({
                   )}
                   {uav.squawk && (
                     <div className="map-popup-row">
-                      Squawk: <span className="text-[#888]">{uav.squawk}</span>
+                      {uiLanguage === 'zh' ? '应答机代码' : 'Transponder Code'}: <span className="text-[#888]">{uav.squawk}</span>
                     </div>
                   )}
                   {uav.wiki && (

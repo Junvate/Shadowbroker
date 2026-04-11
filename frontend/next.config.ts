@@ -27,16 +27,18 @@ function buildAllowedDevOrigins(): string[] {
   try {
     const interfaces = networkInterfaces();
     for (const entries of Object.values(interfaces)) {
-      for (const item of entries || []) {
+      const items = Array.isArray(entries) ? entries : [];
+      for (const item of items) {
         if (!item || item.internal) continue;
+        const itemFamily = (item as { family?: string | number }).family;
         const family =
-          typeof item.family === 'number'
-            ? item.family === 4
+          typeof itemFamily === 'number'
+            ? itemFamily === 4
               ? 'IPv4'
-              : item.family === 6
+              : itemFamily === 6
                 ? 'IPv6'
                 : ''
-            : item.family;
+            : itemFamily;
         if (family !== 'IPv4' && family !== 'IPv6') continue;
         const raw = String(item.address || '').split('%', 1)[0].trim();
         if (!raw) continue;

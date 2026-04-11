@@ -657,7 +657,7 @@ export function ThreatMarkers({
                   </button>
                 )}
                 <div style={{ fontSize: '14px', letterSpacing: '1.5px', textTransform: 'uppercase' as const }}>
-                  !! ALERT LVL {score} !!
+                  {uiLanguage === 'zh' ? `！！${score}级警报！！` : `!! ALERT LVL ${score} !!`}
                 </div>
                 <div
                   style={{
@@ -674,7 +674,9 @@ export function ThreatMarkers({
                   <div
                     style={{ color: riskColor, opacity: 0.9, fontSize: '10px', marginTop: '4px', letterSpacing: '0.5px' }}
                   >
-                    [+{count - 1} 区域内活跃威胁]
+                    {uiLanguage === 'zh'
+                      ? `[+${count - 1} 区域内活跃威胁]`
+                      : `[+${count - 1} active threats in area]`}
                   </div>
                 )}
               </div>

@@ -16,6 +16,7 @@ import {
   Upload,
 } from 'lucide-react';
 import type { SelectedEntity } from '@/types/dashboard';
+import { useTheme } from '@/lib/ThemeContext';
 import type {
   ShodanCountResponse,
   ShodanHost,
@@ -176,6 +177,7 @@ export default function ShodanPanel({
   onMinimizedChange,
   settingsOpen,
 }: Props) {
+  const { uiLanguage } = useTheme();
   const [internalMinimized, setInternalMinimized] = useState(true);
   const isMinimized = isMinimizedProp !== undefined ? isMinimizedProp : internalMinimized;
   const setIsMinimized = (val: boolean | ((prev: boolean) => boolean)) => {
@@ -502,15 +504,15 @@ export default function ShodanPanel({
         <div className="flex items-center gap-2">
           <Radar size={13} className="text-green-400" />
           <span className="text-[12px] font-mono font-bold tracking-[0.25em] text-green-400">
-            SHODAN 连接器
+            {uiLanguage === 'zh' ? 'SHODAN 连接器' : 'SHODAN CONNECTOR'}
           </span>
         </div>
         <div className="flex items-center gap-2 text-[12px] font-mono">
           <span className="border border-green-700/40 px-1.5 py-0.5 text-green-300">
-            {currentResults.length.toLocaleString()} 地图点
+            {currentResults.length.toLocaleString()} {uiLanguage === 'zh' ? '地图点' : 'MAP POINTS'}
           </span>
           <span className="border border-green-700/40 px-1.5 py-0.5 text-green-500/80">
-            本地
+            {uiLanguage === 'zh' ? '本地' : 'LOCAL'}
           </span>
           {isMinimized ? (
             <ChevronUp size={12} className="text-green-500" />
