@@ -6,7 +6,7 @@ import { lookupStaticUiText } from '@/lib/zhStaticDictionary';
 import { useTheme, type UiLanguage } from '@/lib/ThemeContext';
 
 const THREAT_TITLE_TRANSLATION_MIN_LENGTH = 16;
-const THREAT_TITLE_CACHE_KEY = 'sb_threat_title_ui_cache_v1';
+const THREAT_TITLE_CACHE_KEY = 'sb_threat_title_ui_cache_v2';
 const THREAT_TITLE_CACHE_LIMIT = 5000;
 const threatTitleCache = new Map<string, string>();
 let threatTitleStorageHydrated = false;
@@ -37,6 +37,24 @@ function hasLatin(text: string): boolean {
 
 function isMixedZhEn(text: string): boolean {
   return hasCjk(text) && hasLatin(text);
+}
+
+function isAcceptableThreatTitleTranslation(
+  source: string,
+  candidate: string,
+  uiLanguage: UiLanguage,
+): boolean {
+  const src = String(source || '').trim();
+  const out = String(candidate || '').trim();
+  if (!src || !out) return false;
+  if (src === out) return false;
+  if (uiLanguage === 'zh' && hasLatin(src)) {
+    return hasCjk(out);
+  }
+  if (uiLanguage === 'en' && hasCjk(src)) {
+    return hasLatin(out);
+  }
+  return true;
 }
 
 function setThreatTitleCache(cacheKey: string, translated: string): void {
@@ -110,7 +128,10 @@ function useThreatTitleTranslations(
     for (const title of titles) {
       const cached = threatTitleCache.get(threatCacheKey(uiLanguage, title));
       if (cached != null) {
-        if (shouldTranslateThreatTitle(title, uiLanguage) && isMixedZhEn(cached)) {
+        if (
+          shouldTranslateThreatTitle(title, uiLanguage) &&
+          (!isAcceptableThreatTitleTranslation(title, cached, uiLanguage) || isMixedZhEn(cached))
+        ) {
           threatTitleCache.delete(threatCacheKey(uiLanguage, title));
           pending.push(title);
           continue;
@@ -154,9 +175,11 @@ function useThreatTitleTranslations(
         if (!resp.ok) {
           let dirty = false;
           pending.forEach((source) => {
-            const fallback = pickStaticTitleFallback(source, uiLanguage) || source;
-            setThreatTitleCache(threatCacheKey(uiLanguage, source), fallback);
-            dirty = true;
+            const fallback = pickStaticTitleFallback(source, uiLanguage);
+            if (fallback && fallback !== source) {
+              setThreatTitleCache(threatCacheKey(uiLanguage, source), fallback);
+              dirty = true;
+            }
           });
           if (dirty) persistThreatTitleCacheToStorage();
           return;
@@ -169,16 +192,16 @@ function useThreatTitleTranslations(
 
         pending.forEach((source, idx) => {
           const out = String(translated[idx] || '').trim();
-          if (out && out !== source) {
+          if (isAcceptableThreatTitleTranslation(source, out, uiLanguage)) {
             setThreatTitleCache(threatCacheKey(uiLanguage, source), out);
             dirty = true;
             mapped[source] = out;
             return;
           }
-          const fallback = pickStaticTitleFallback(source, uiLanguage) || source;
-          setThreatTitleCache(threatCacheKey(uiLanguage, source), fallback);
-          dirty = true;
-          if (fallback !== source) {
+          const fallback = pickStaticTitleFallback(source, uiLanguage);
+          if (fallback && fallback !== source) {
+            setThreatTitleCache(threatCacheKey(uiLanguage, source), fallback);
+            dirty = true;
             mapped[source] = fallback;
           }
         });
@@ -191,10 +214,10 @@ function useThreatTitleTranslations(
         let dirty = false;
         const mapped: Record<string, string> = {};
         pending.forEach((source) => {
-          const fallback = pickStaticTitleFallback(source, uiLanguage) || source;
-          setThreatTitleCache(threatCacheKey(uiLanguage, source), fallback);
-          dirty = true;
-          if (fallback !== source) {
+          const fallback = pickStaticTitleFallback(source, uiLanguage);
+          if (fallback && fallback !== source) {
+            setThreatTitleCache(threatCacheKey(uiLanguage, source), fallback);
+            dirty = true;
             mapped[source] = fallback;
           }
         });

@@ -404,6 +404,29 @@ function localTargetLanguageLabel(targetLang: string): string {
   return upper || 'English';
 }
 
+function hasCjk(text: string): boolean {
+  return /[\u4e00-\u9fff]/.test(text);
+}
+
+function hasLatin(text: string): boolean {
+  return /[A-Za-z]/.test(text);
+}
+
+function isAcceptableTranslation(source: string, candidate: string, targetLang: string): boolean {
+  const src = String(source || '').trim();
+  const out = String(candidate || '').trim();
+  if (!src || !out) return false;
+  if (src === out) return false;
+  const upper = String(targetLang || '').toUpperCase();
+  if (upper.startsWith('ZH') && hasLatin(src)) {
+    return hasCjk(out);
+  }
+  if (upper.startsWith('EN') && hasCjk(src)) {
+    return hasLatin(out);
+  }
+  return true;
+}
+
 async function translateWithLocalModel(
   config: LocalTranslateConfig,
   texts: string[],
@@ -609,7 +632,11 @@ export async function POST(req: NextRequest) {
         }
       }
       for (let i = 0; i < missing.length; i += 1) {
-        serverTranslationCache.set(missing[i], translatedMissing[i] || missing[i]);
+        const source = missing[i];
+        const candidate = translatedMissing[i] || '';
+        if (isAcceptableTranslation(source, candidate, targetLang)) {
+          serverTranslationCache.set(source, candidate);
+        }
       }
       if (serverTranslationCache.size > SERVER_TRANSLATION_CACHE_LIMIT) {
         const overflow = serverTranslationCache.size - SERVER_TRANSLATION_CACHE_LIMIT;
