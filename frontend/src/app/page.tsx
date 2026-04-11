@@ -744,13 +744,6 @@ export default function Dashboard() {
 
               {/* GLOBAL TICKER REPLACES MARKETS PANEL - RENDERED OUTSIDE THIS DIV */}
 
-              {/* ORACLE PREDICTIONS */}
-              <div className={`flex-shrink-0 ${rightFocusedPanel && rightFocusedPanel !== 'predictions' ? 'hidden' : ''}`}>
-                <ErrorBoundary name="PredictionsPanel">
-                  <PredictionsPanel />
-                </ErrorBoundary>
-              </div>
-
               {/* DATA FILTERS */}
               <div className={`flex-shrink-0 ${rightFocusedPanel && rightFocusedPanel !== 'filters' ? 'hidden' : ''}`}>
                 <ErrorBoundary name="FilterPanel">
@@ -774,6 +767,13 @@ export default function Dashboard() {
                       }
                     }}
                   />
+                </ErrorBoundary>
+              </div>
+
+              {/* ORACLE PREDICTIONS */}
+              <div className={`flex-shrink-0 ${rightFocusedPanel && rightFocusedPanel !== 'predictions' ? 'hidden' : ''}`}>
+                <ErrorBoundary name="PredictionsPanel">
+                  <PredictionsPanel />
                 </ErrorBoundary>
               </div>
             </motion.div>
