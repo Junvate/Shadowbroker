@@ -99,10 +99,10 @@ export const DEFAULT_AI_QA_CONFIG: AiQaPanelConfig = {
   storageKey: 'sb_ai_qa_v1',
   maxMessages: 48,
   quickPrompts: [
-    '查询目的地为新加坡的船舶',
+    '重点查看波斯湾船舶动态',
     '查询 MMSI 538090091 的船舶详情',
     '查询巴拿马籍货船',
-    '查询新加坡海峡附近正在移动的船舶',
+    '查询霍尔木兹海峡附近正在移动的船舶',
     '查询航母打击群 tracker 目标',
     '查询美军航母 CVN-78',
     '查询 ANA 航班',

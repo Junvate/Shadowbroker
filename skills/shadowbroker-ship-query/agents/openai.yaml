@@ -1,0 +1,7 @@
+interface:
+  display_name: "Shadowbroker 船舶查询"
+  short_description: "查询船舶、航母打击群和 PLAN/CCG 舰艇。"
+  default_prompt: "使用 $shadowbroker-ship-query 拉取实时 ships 数据，按船舶、航母 tracker 或 PLAN/CCG 增强字段做过滤，并返回带匹配原因的证据。"
+
+policy:
+  allow_implicit_invocation: true

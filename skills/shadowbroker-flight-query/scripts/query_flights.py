@@ -24,6 +24,7 @@ TEXT_MATCH_FIELDS = [
     "dest_name",
 ]
 IATA_PATTERN = re.compile(r"^\s*([A-Z]{3})\s*:")
+MISSING_TEXT_MARKERS = {"UNKNOWN", "N/A", "NULL", "NONE"}
 
 
 def to_float(value: Any, default: float = 0.0) -> float:
@@ -53,6 +54,17 @@ def point_in_bbox(lon: Any, lat: Any, bbox: tuple[float, float, float, float]) -
     return min_lon <= lon_f <= max_lon and min_lat <= lat_f <= max_lat
 
 
+def has_coordinate_pair(value: Any) -> bool:
+    if not isinstance(value, (list, tuple)) or len(value) < 2:
+        return False
+    try:
+        float(value[0])
+        float(value[1])
+    except (TypeError, ValueError):
+        return False
+    return True
+
+
 def parse_iata(dest_name: str) -> str:
     match = IATA_PATTERN.match(dest_name or "")
     if not match:
@@ -65,6 +77,50 @@ def contains_any_keyword(text: str, keywords: list[str]) -> bool:
         return True
     lowered = (text or "").lower()
     return any(keyword in lowered for keyword in keywords)
+
+
+def has_meaningful_text(value: Any) -> bool:
+    text = str(value or "").strip()
+    return bool(text) and text.upper() not in MISSING_TEXT_MARKERS
+
+
+def has_destination_data(flight: dict[str, Any]) -> bool:
+    return has_meaningful_text(flight.get("dest_name")) or has_coordinate_pair(flight.get("dest_loc"))
+
+
+def flight_dedupe_key(flight: dict[str, Any]) -> str:
+    callsign = str(flight.get("callsign", "")).strip().upper()
+    icao24 = str(flight.get("icao24", "")).strip().lower()
+    registration = str(flight.get("registration", "")).strip().upper()
+    if icao24 or callsign:
+        return f"{icao24}|{callsign}"
+    if registration:
+        return f"reg|{registration}"
+    return ""
+
+
+def flight_quality_key(flight: dict[str, Any]) -> tuple[int, int, int, float, float]:
+    populated_fields = sum(
+        1
+        for field in ("callsign", "icao24", "registration", "type", "model", "origin_name", "dest_name")
+        if str(flight.get(field, "")).strip()
+    )
+    source_bucket = str(flight.get("source_bucket", ""))
+    return (
+        1 if has_destination_data(flight) else 0,
+        populated_fields,
+        1 if source_bucket == "tracked_flights" else 0,
+        to_float(flight.get("alt")),
+        to_float(flight.get("speed_knots")),
+    )
+
+
+def format_location_label(name: Any, coord: Any) -> str:
+    if has_meaningful_text(name):
+        return str(name).strip()
+    if has_coordinate_pair(coord):
+        return f"[{float(coord[0]):.4f},{float(coord[1]):.4f}]"
+    return "UNKNOWN"
 
 
 def fetch_fast_snapshot(base_url: str, timeout: float) -> dict[str, Any]:
@@ -90,7 +146,7 @@ def fetch_fast_snapshot(base_url: str, timeout: float) -> dict[str, Any]:
 
 def normalize_flights(payload: dict[str, Any]) -> list[dict[str, Any]]:
     merged: list[dict[str, Any]] = []
-    seen: set[str] = set()
+    seen_index: dict[str, int] = {}
     for bucket in FLIGHT_BUCKETS:
         entries = payload.get(bucket)
         if not isinstance(entries, list):
@@ -98,14 +154,16 @@ def normalize_flights(payload: dict[str, Any]) -> list[dict[str, Any]]:
         for item in entries:
             if not isinstance(item, dict):
                 continue
-            callsign = str(item.get("callsign", "")).strip().upper()
-            icao24 = str(item.get("icao24", "")).strip().lower()
-            unique = f"{icao24}|{callsign}|{bucket}"
-            if unique in seen:
-                continue
-            seen.add(unique)
             row = dict(item)
             row.setdefault("source_bucket", bucket)
+            unique = flight_dedupe_key(row)
+            if unique:
+                existing_idx = seen_index.get(unique)
+                if existing_idx is not None:
+                    if flight_quality_key(row) > flight_quality_key(merged[existing_idx]):
+                        merged[existing_idx] = row
+                    continue
+                seen_index[unique] = len(merged)
             merged.append(row)
     return merged
 
@@ -136,7 +194,7 @@ def evaluate_flight(
     dest_name = str(flight.get("dest_name", ""))
     dest_loc = flight.get("dest_loc")
 
-    if args.require_destination and not (dest_name.strip() or isinstance(dest_loc, (list, tuple))):
+    if args.require_destination and not has_destination_data(flight):
         return False, 0, []
 
     if match_terms:
@@ -183,7 +241,7 @@ def evaluate_flight(
         score += 1
 
     if dest_bbox is not None:
-        if not isinstance(dest_loc, (list, tuple)) or len(dest_loc) < 2:
+        if not has_coordinate_pair(dest_loc):
             return False, 0, []
         if not point_in_bbox(dest_loc[0], dest_loc[1], dest_bbox):
             return False, 0, []
@@ -301,7 +359,7 @@ def main() -> int:
     for idx, row in enumerate(rows, start=1):
         callsign = str(row.get("callsign") or "UNKNOWN")
         origin = str(row.get("origin_name") or "UNKNOWN")
-        dest = str(row.get("dest_name") or "UNKNOWN")
+        dest = format_location_label(row.get("dest_name"), row.get("dest_loc"))
         alt = row.get("alt")
         speed = row.get("speed_knots")
         reasons = ",".join(row.get("match_reasons") or [])
