@@ -343,15 +343,18 @@ const OnboardingModal = React.memo(function OnboardingModal({
   );
 });
 
-export function useOnboarding() {
+export function useOnboarding(autoOpen = true) {
   const [showOnboarding, setShowOnboarding] = useState(false);
 
   useEffect(() => {
+    if (!autoOpen) {
+      return;
+    }
     const done = localStorage.getItem(STORAGE_KEY);
     if (!done) {
       setShowOnboarding(true);
     }
-  }, []);
+  }, [autoOpen]);
 
   return { showOnboarding, setShowOnboarding };
 }

@@ -6,6 +6,7 @@ import {
   Bot,
   ChevronDown,
   ChevronUp,
+  Plane,
   RotateCcw,
   SendHorizontal,
   Settings2,
@@ -19,10 +20,13 @@ import {
   requestAiQaAnswer,
   resolveAiQaConfig,
 } from '@/lib/aiQa';
+import type { FlightQueryMatch } from '@/types/dashboard';
 
 interface AiQaPanelProps {
   config?: AiQaConfigOverrides;
   context?: Record<string, unknown>;
+  onFlightMatches?: (matches: FlightQueryMatch[]) => void;
+  onFlyToFlight?: (lat: number, lng: number) => void;
 }
 
 interface PersistedSettings {
@@ -173,7 +177,7 @@ function parseExecutionMessage(content: string): ParsedExecutionMessage | null {
   };
 }
 
-export default function AiQaPanel({ config, context }: AiQaPanelProps) {
+export default function AiQaPanel({ config, context, onFlightMatches, onFlyToFlight }: AiQaPanelProps) {
   const resolvedConfig = useMemo(
     () => resolveAiQaConfig(config),
     [config],
@@ -348,6 +352,8 @@ export default function AiQaPanel({ config, context }: AiQaPanelProps) {
           },
           metadata: context,
         });
+        const isFlightQuery = Boolean(response.flightQuery);
+        const matchedFlights = isFlightQuery ? (response.flightMatches || []) : [];
         setMessages((prev) =>
           prev.map((msg) => {
             if (msg.id !== pendingReply.id) return msg;
@@ -356,9 +362,12 @@ export default function AiQaPanel({ config, context }: AiQaPanelProps) {
               content: response.text,
               traceId: response.traceId,
               agentId: response.agentId || selectedAgent.id,
+              flightQuery: isFlightQuery || undefined,
+              flightMatches: matchedFlights.length > 0 ? matchedFlights : undefined,
             };
           }),
         );
+        onFlightMatches?.(matchedFlights);
       } catch (error) {
         const message = error instanceof Error ? error.message : 'AI 请求失败，请稍后重试';
         setMessages((prev) =>
@@ -381,6 +390,7 @@ export default function AiQaPanel({ config, context }: AiQaPanelProps) {
       isSubmitting,
       maxTokens,
       messages,
+      onFlightMatches,
       resolvedConfig,
       sessionId,
       selectedAgent,
@@ -394,6 +404,7 @@ export default function AiQaPanel({ config, context }: AiQaPanelProps) {
     setIsSubmitting(false);
     setSessionId(nextSessionId);
     setMessages([makeAssistantMessage(resolvedConfig.welcomeMessage, selectedAgent?.id)]);
+    onFlightMatches?.([]);
     try {
       window.localStorage.removeItem(storageMessageKey);
       window.localStorage.setItem(storageSessionKey, nextSessionId);
@@ -675,6 +686,37 @@ export default function AiQaPanel({ config, context }: AiQaPanelProps) {
                           </div>
                         );
                       })()}
+                      {msg.role === 'assistant' && msg.flightMatches && msg.flightMatches.length > 0 && (
+                        <div className="mt-1.5 space-y-1">
+                          <div className="text-[8px] font-mono text-red-300/80 tracking-widest">
+                            已在地图上高亮 {msg.flightMatches.length} 架航班
+                          </div>
+                          <div className="grid gap-1">
+                            {msg.flightMatches.map((fm) => (
+                              <button
+                                key={fm.id}
+                                type="button"
+                                className="flex items-center gap-1.5 w-full text-left border border-red-500/30 bg-red-950/20 hover:bg-red-950/40 px-1.5 py-1 transition-colors group"
+                                onClick={() => onFlyToFlight?.(fm.lat, fm.lng)}
+                              >
+                                <Plane className="h-3 w-3 text-red-400 shrink-0 group-hover:text-red-300" />
+                                <span className="text-[8px] font-mono text-red-300 tracking-wider truncate">
+                                  {fm.callsign || fm.icao24.toUpperCase()}
+                                </span>
+                                <span className="ml-auto text-[7px] font-mono text-[var(--text-muted)] shrink-0">
+                                  {fm.sourceBucket.replace('_', ' ')}
+                                </span>
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      {msg.role === 'assistant' && msg.flightQuery && !msg.flightMatches?.length && (
+                        <div className="mt-1.5 flex items-center gap-1 text-[8px] font-mono text-amber-400/80 tracking-widest">
+                          <Plane className="h-3 w-3 shrink-0" />
+                          未找到匹配的在线航班
+                        </div>
+                      )}
                       {msg.traceId && (
                         <div className="text-[7px] text-[var(--text-muted)] font-mono mt-1">
                           追踪: {msg.traceId}

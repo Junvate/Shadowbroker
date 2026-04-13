@@ -641,6 +641,7 @@ const MaplibreViewer = ({
   setTrackedScanner,
   shodanResults,
   shodanStyle,
+  flightHighlights,
 }: Omit<MaplibreViewerProps, 'data'>) => {
   const data = useDataSnapshot() as import('@/types/dashboard').DashboardData;
   const mapRef = useRef<MapRef>(null);
@@ -777,6 +778,66 @@ const MaplibreViewer = ({
     data?.ships,
     data?.satellites,
     resetTimestamp,
+  ]);
+
+  const liveFlightHighlights = useMemo(() => {
+    void interpTick;
+    if (!flightHighlights?.length) return [];
+
+    return flightHighlights
+      .map((match) => {
+        const targetIcao = match.icao24.toLowerCase();
+        let flight = null;
+
+        switch (match.sourceBucket) {
+          case 'commercial_flights':
+            flight = data?.commercial_flights?.find((item) => item.icao24?.toLowerCase() === targetIcao) || null;
+            break;
+          case 'private_flights':
+            flight = data?.private_flights?.find((item) => item.icao24?.toLowerCase() === targetIcao) || null;
+            break;
+          case 'private_jets':
+            flight = data?.private_jets?.find((item) => item.icao24?.toLowerCase() === targetIcao) || null;
+            break;
+          case 'tracked_flights':
+            flight = data?.tracked_flights?.find((item) => item.icao24?.toLowerCase() === targetIcao) || null;
+            break;
+          case 'military_flights':
+            flight = data?.military_flights?.find((item) => item.icao24?.toLowerCase() === targetIcao) || null;
+            break;
+          default:
+            flight =
+              data?.commercial_flights?.find((item) => item.icao24?.toLowerCase() === targetIcao)
+              || data?.private_flights?.find((item) => item.icao24?.toLowerCase() === targetIcao)
+              || data?.private_jets?.find((item) => item.icao24?.toLowerCase() === targetIcao)
+              || data?.tracked_flights?.find((item) => item.icao24?.toLowerCase() === targetIcao)
+              || data?.military_flights?.find((item) => item.icao24?.toLowerCase() === targetIcao)
+              || null;
+            break;
+        }
+
+        const coords = flight ? interpFlight(flight) : [match.lng, match.lat];
+        const lng = Number(coords[0]);
+        const lat = Number(coords[1]);
+        if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+
+        return {
+          ...match,
+          callsign: flight?.callsign || match.callsign,
+          lat,
+          lng,
+        };
+      })
+      .filter((match): match is NonNullable<typeof match> => Boolean(match));
+  }, [
+    data?.commercial_flights,
+    data?.military_flights,
+    data?.private_flights,
+    data?.private_jets,
+    data?.tracked_flights,
+    flightHighlights,
+    interpFlight,
+    interpTick,
   ]);
 
   // --- Solar Terminator: recompute the night polygon every 60 seconds ---
@@ -3594,6 +3655,49 @@ const MaplibreViewer = ({
             interpFlight={interpFlight}
           />
         )}
+
+        {liveFlightHighlights.map((flightMatch) => {
+          const bucketToType: Record<string, string> = {
+            commercial_flights: 'commercial_flight',
+            private_flights: 'private_flight',
+            private_jets: 'private_flight',
+            tracked_flights: 'tracked_flight',
+            military_flights: 'military_flight',
+          };
+          return (
+            <Marker
+              key={`flight-highlight-${flightMatch.id}`}
+              longitude={flightMatch.lng}
+              latitude={flightMatch.lat}
+              anchor="center"
+              style={{ zIndex: 90 }}
+            >
+              <div
+                className="relative flex cursor-pointer flex-col items-center"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onEntityClick?.({
+                    id: flightMatch.icao24,
+                    type: bucketToType[flightMatch.sourceBucket] || 'tracked_flight',
+                    name: flightMatch.callsign || flightMatch.icao24.toUpperCase(),
+                    extra: { ...flightMatch },
+                  });
+                }}
+              >
+                <div className="relative flex items-center justify-center">
+                  <span className="absolute h-9 w-9 rounded-full border border-red-500/70 animate-ping" />
+                  <span className="absolute h-7 w-7 rounded-full border-2 border-red-400 shadow-[0_0_18px_rgba(248,113,113,0.75)]" />
+                  <span className="h-2.5 w-2.5 rounded-full bg-red-400 shadow-[0_0_10px_rgba(248,113,113,0.95)]" />
+                </div>
+                {mapZoom >= 5 && (
+                  <span className="mt-2 whitespace-nowrap border border-red-500/40 bg-black/85 px-1.5 py-0.5 text-[8px] font-mono tracking-widest text-red-300 shadow-[0_0_12px_rgba(248,113,113,0.25)]">
+                    {flightMatch.callsign || flightMatch.icao24.toUpperCase()}
+                  </span>
+                )}
+              </div>
+            </Marker>
+          );
+        })}
 
         {/* HTML labels for carriers (orange names, with ESTIMATED badge for OSINT positions) */}
         {carriersGeoJSON && !selectedEntity && !isMapInteracting && data?.ships && (

@@ -2231,7 +2231,7 @@ async def force_refresh(request: Request):
 @limiter.limit("60/minute")
 async def ais_feed(request: Request):
     """Accept AIS-catcher HTTP JSON feed (POST decoded AIS messages)."""
-    from services.ais_stream import ingest_ais_catcher
+    from services.ais_stream import get_ais_vessels, ingest_ais_catcher
 
     try:
         body = await request.json()
@@ -2240,10 +2240,10 @@ async def ais_feed(request: Request):
 
     msgs = body.get("msgs", [])
     if not msgs:
-        return {"status": "ok", "ingested": 0}
+        return {"status": "ok", "ingested": 0, "received": [], "vessels": get_ais_vessels()}
 
     count = ingest_ais_catcher(msgs)
-    return {"status": "ok", "ingested": count}
+    return {"status": "ok", "ingested": count, "received": msgs, "vessels": get_ais_vessels()}
 
 
 from pydantic import BaseModel

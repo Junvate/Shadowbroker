@@ -3,15 +3,16 @@
 import { useEffect, useRef } from 'react';
 import { useTheme, type UiLanguage } from '@/lib/ThemeContext';
 import { lookupStaticUiText } from '@/lib/zhStaticDictionary';
+import { TRANSLATION_MAX_TEXT_LENGTH } from '@/lib/translationConstants';
 
 const CACHE_KEY = 'sb_auto_ui_cache_v1';
-const MAX_TEXT_LENGTH = 240;
 const MAX_SCAN_ITEMS = 1400;
 const MAX_PENDING_API_TEXTS = 24;
 const MAX_CACHE_ENTRIES = 5000;
 const MUTATION_DELAY_MS = 180;
 const VISIBILITY_RECHECK_MS = 1200;
 const ERROR_COOLDOWN_MS = 6000;
+const NO_RESULT_RETRY_MS = 60000;
 
 type TranslateTask =
   | {
@@ -53,10 +54,18 @@ function normalizeText(raw: string): string {
 function shouldTranslateText(raw: string, uiLanguage: UiLanguage): boolean {
   const text = raw.trim();
   if (!text) return false;
-  if (text.length > MAX_TEXT_LENGTH) return false;
+  if (text.length > TRANSLATION_MAX_TEXT_LENGTH) return false;
   if (/^https?:\/\//i.test(text)) return false;
   if (/^[\d\s\-:/.]+$/.test(text)) return false;
   return uiLanguage === 'zh' ? /[A-Za-z]/.test(text) : /[\u4e00-\u9fff]/.test(text);
+}
+
+function isAcceptableTranslation(source: string, candidate: string, uiLanguage: UiLanguage): boolean {
+  const src = normalizeText(source);
+  const out = normalizeText(candidate);
+  if (!src || !out || src === out) return false;
+  if (uiLanguage === 'zh') return /[\u4e00-\u9fff]/.test(out);
+  return /[A-Za-z]/.test(out);
 }
 
 function safeLoadCache(): Map<string, string> {
@@ -83,7 +92,7 @@ function safeSaveCache(cache: Map<string, string>) {
 export default function AutoZhTranslator() {
   const { uiLanguage } = useTheme();
   const cacheRef = useRef<Map<string, string>>(new Map());
-  const noChangeRef = useRef<Set<string>>(new Set());
+  const retryAfterRef = useRef<Map<string, number>>(new Map());
   const textStateRef = useRef<WeakMap<Text, NodeTranslationState>>(new WeakMap());
   const attrStateRef = useRef<WeakMap<HTMLElement, Partial<Record<'placeholder' | 'title' | 'aria-label' | 'value', NodeTranslationState>>>>(new WeakMap());
   const runningRef = useRef(false);
@@ -211,7 +220,11 @@ export default function AutoZhTranslator() {
 
         const pendingText = Array.from(new Set(tasks.map((t) => t.source)))
           .filter((source) => shouldTranslateText(source, uiLanguage))
-          .filter((source) => !cache.has(cacheKeyFor(source)) && !noChangeRef.current.has(cacheKeyFor(source)))
+          .filter((source) => {
+            if (cache.has(cacheKeyFor(source))) return false;
+            const retryAfter = retryAfterRef.current.get(cacheKeyFor(source)) || 0;
+            return retryAfter <= Date.now();
+          })
           .slice(0, MAX_PENDING_API_TEXTS);
 
         if (pendingText.length > 0 && Date.now() >= apiCooldownUntilRef.current) {
@@ -228,21 +241,23 @@ export default function AutoZhTranslator() {
             const isFallback = Boolean(data?.fallback);
             const translated = Array.isArray(data?.translations) ? data.translations : [];
             pendingText.forEach((src, idx) => {
-              const out = translated[idx];
-              if (out && out !== src) {
+              const out = normalizeText(translated[idx] || '');
+              const cacheKey = cacheKeyFor(src);
+              if (isAcceptableTranslation(src, out, uiLanguage)) {
                 cache.set(cacheKeyFor(src), out);
+                retryAfterRef.current.delete(cacheKey);
                 cacheDirty = true;
                 return;
               }
               if (!isFallback) {
-                noChangeRef.current.add(cacheKeyFor(src));
+                retryAfterRef.current.set(cacheKey, Date.now() + NO_RESULT_RETRY_MS);
               }
             });
           } else {
             const err = await resp.json().catch(() => ({}));
             if ((err as { error?: string })?.error === 'missing_translate_api_key') {
               console.warn(
-                '[AutoZhTranslator] Missing translation provider config in backend/.env. Set LOCAL_TRANSLATE_API_URL + LOCAL_TRANSLATE_MODEL, or DEEPL_API_KEY, or NIUTRANS_API_KEY.',
+                '[AutoZhTranslator] Missing translation provider config. Set LOCAL_TRANSLATE_API_URL + LOCAL_TRANSLATE_MODEL, or DEEPL_API_KEY, or NIUTRANS_API_KEY in the frontend server env (Docker: frontend.environment) or a local .env/backend/.env file.',
               );
             }
             cooldownUntilRef.current = Date.now() + 30_000;

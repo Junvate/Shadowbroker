@@ -1,4 +1,5 @@
 import { API_BASE } from '@/lib/api';
+import type { FlightQueryMatch } from '@/types/dashboard';
 
 export type AiQaRole = 'user' | 'assistant';
 
@@ -9,6 +10,8 @@ export interface AiQaChatMessage {
   createdAt: number;
   agentId?: string;
   traceId?: string;
+  flightQuery?: boolean;
+  flightMatches?: FlightQueryMatch[];
 }
 
 export interface AiQaAgentConfig {
@@ -47,6 +50,8 @@ export interface AiQaResponsePayload {
   text: string;
   traceId?: string;
   agentId?: string;
+  flightQuery?: boolean;
+  flightMatches?: FlightQueryMatch[];
   raw?: unknown;
 }
 
@@ -155,6 +160,11 @@ function asString(value: unknown): string | null {
   return null;
 }
 
+function asFiniteNumber(value: unknown): number | null {
+  const num = Number(value);
+  return Number.isFinite(num) ? num : null;
+}
+
 function extractTextFromResponse(payload: unknown): string | null {
   if (!isRecord(payload)) return null;
 
@@ -206,6 +216,39 @@ function extractErrorMessage(payload: unknown, status: number): string {
     if (message) return message;
   }
   return `AI 请求失败（HTTP ${status}）`;
+}
+
+function extractFlightMatches(payload: unknown): FlightQueryMatch[] {
+  if (!Array.isArray(payload)) return [];
+  const matches: FlightQueryMatch[] = [];
+  const seen = new Set<string>();
+
+  for (const item of payload) {
+    if (!isRecord(item)) continue;
+    const icao24 = asString(item.icao24)?.toLowerCase() || '';
+    const lat = asFiniteNumber(item.lat);
+    const lng = asFiniteNumber(item.lng);
+    if (!icao24 || lat === null || lng === null) continue;
+
+    const sourceBucket = asString(item.source_bucket) || 'commercial_flights';
+    const id = asString(item.id) || `${sourceBucket}:${icao24}`;
+    if (seen.has(id)) continue;
+    seen.add(id);
+
+    matches.push({
+      id,
+      callsign: asString(item.callsign) || icao24.toUpperCase(),
+      icao24,
+      lat,
+      lng,
+      sourceBucket,
+      matchReasons: Array.isArray(item.match_reasons)
+        ? item.match_reasons.map((reason) => String(reason))
+        : [],
+    });
+  }
+
+  return matches;
 }
 
 function buildMockResponse(request: AiQaRequestPayload): string {
@@ -261,10 +304,14 @@ async function requestViaHttp(
     }
     const traceId = isRecord(payload) ? asString(payload.trace_id) : null;
     const agentId = isRecord(payload) ? asString(payload.agent_id) : null;
+    const flightQuery = isRecord(payload) ? Boolean(payload.flight_query) : false;
+    const flightMatches = isRecord(payload) ? extractFlightMatches(payload.flight_matches) : [];
     return {
       text,
       traceId: traceId || undefined,
       agentId: agentId || request.agent.id,
+      flightQuery,
+      flightMatches,
       raw: payload,
     };
   } catch (error) {

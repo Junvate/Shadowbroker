@@ -97,6 +97,16 @@ type ScriptRunResult = {
   spawnError?: string;
 };
 
+type FlightMatchPayload = {
+  id: string;
+  callsign: string;
+  icao24: string;
+  lat: number;
+  lng: number;
+  source_bucket: string;
+  match_reasons: string[];
+};
+
 type ExecuteModeResult = {
   attempted: boolean;
   text: string;
@@ -108,19 +118,26 @@ function buildExecuteModeResponse(
   executeResult: ExecuteModeResult,
   agentId: string,
   fallbackDetail?: string,
+  flightMatches?: FlightMatchPayload[],
+  flightQuery = false,
 ): NextResponse {
   const prefix = fallbackDetail
     ? `上游 nanobot 当前不可用，已回退到本地技能执行。\n原因: ${fallbackDetail}\n\n`
     : '';
+  const responseBody: UnknownRecord = {
+    text: `${prefix}${executeResult.text}`,
+    agent_id: agentId,
+    execute_mode: true,
+    execute_succeeded: executeResult.succeeded,
+    execute_failed: executeResult.failed,
+    trace_id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+  };
+  if (flightQuery) {
+    responseBody.flight_query = true;
+    responseBody.flight_matches = flightMatches || [];
+  }
   return NextResponse.json(
-    {
-      text: `${prefix}${executeResult.text}`,
-      agent_id: agentId,
-      execute_mode: true,
-      execute_succeeded: executeResult.succeeded,
-      execute_failed: executeResult.failed,
-      trace_id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
-    },
+    responseBody,
     { headers: NO_STORE_PROXY_HEADERS },
   );
 }
@@ -140,6 +157,11 @@ function appendCapped(current: string, chunk: string, maxChars: number): string 
   const remain = maxChars - current.length;
   if (chunk.length <= remain) return current + chunk;
   return current + chunk.slice(0, remain);
+}
+
+function toFiniteNumber(value: unknown): number | null {
+  const num = Number(value);
+  return Number.isFinite(num) ? num : null;
 }
 
 function sanitizeApiEndpoint(raw: string): string {
@@ -551,9 +573,10 @@ async function runExecuteMode(
   body: UnknownRecord,
   repoRoot: string,
   backendBaseUrl: string,
+  precomputedPlans?: ScriptExecutionPlan[],
 ): Promise<ExecuteModeResult> {
   const message = asString(body.message).trim();
-  const plans = buildExecutionPlans(message, repoRoot, backendBaseUrl);
+  const plans = precomputedPlans || buildExecutionPlans(message, repoRoot, backendBaseUrl);
   if (plans.length === 0) {
     return { attempted: false, text: '', succeeded: 0, failed: 0 };
   }
@@ -585,6 +608,156 @@ async function runExecuteMode(
     succeeded,
     failed,
   };
+}
+
+function extractFlightMatches(value: unknown): FlightMatchPayload[] {
+  if (!Array.isArray(value)) return [];
+  const matches: FlightMatchPayload[] = [];
+  const seen = new Set<string>();
+
+  for (const item of value) {
+    if (!isRecord(item)) continue;
+    const icao24 = asString(item.icao24).trim().toLowerCase();
+    const lat = toFiniteNumber(item.lat);
+    const lng = toFiniteNumber(item.lng);
+    if (!icao24 || lat === null || lng === null) continue;
+
+    const sourceBucket = asString(item.source_bucket).trim() || 'commercial_flights';
+    const id = `${sourceBucket}:${icao24}`;
+    if (seen.has(id)) continue;
+    seen.add(id);
+
+    matches.push({
+      id,
+      callsign: asString(item.callsign).trim() || icao24.toUpperCase(),
+      icao24,
+      lat,
+      lng,
+      source_bucket: sourceBucket,
+      match_reasons: Array.isArray(item.match_reasons)
+        ? item.match_reasons.map((reason) => String(reason))
+        : [],
+    });
+  }
+
+  return matches;
+}
+
+async function runFlightHighlightProbe(
+  plan: ScriptExecutionPlan | null,
+  backendBaseUrl: string,
+): Promise<FlightMatchPayload[]> {
+  if (!plan || plan.skillId !== 'shadowbroker-flight-query') return [];
+
+  const timeoutMs = clampInteger(
+    process.env.AI_QA_FLIGHT_MATCH_TIMEOUT_MS,
+    500,
+    30000,
+    4500,
+  );
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const upstream = await fetch(`${backendBaseUrl.replace(/\/+$/, '')}/api/live-data/fast`, {
+      method: 'GET',
+      cache: 'no-store',
+      signal: controller.signal,
+    });
+    if (!upstream.ok) return [];
+
+    const parsed = await upstream.json().catch(() => null);
+    if (!isRecord(parsed)) return [];
+
+    const destKeywords = new Set<string>();
+    const matchTerms = new Set<string>();
+    let callsignPrefix = '';
+    let icao24 = '';
+    let limit = 50;
+
+    for (let idx = 0; idx < plan.args.length; idx += 1) {
+      const token = plan.args[idx];
+      const value = plan.args[idx + 1];
+      if (!value) continue;
+      if (token === '--dest-keyword') destKeywords.add(String(value).trim().toLowerCase());
+      if (token === '--match') matchTerms.add(String(value).trim().toLowerCase());
+      if (token === '--callsign-prefix') callsignPrefix = String(value).trim().toUpperCase();
+      if (token === '--icao24') icao24 = String(value).trim().toLowerCase();
+      if (token === '--limit') limit = clampInteger(value, 1, 500, 50);
+    }
+
+    const flightBuckets = [
+      'commercial_flights',
+      'private_jets',
+      'private_flights',
+      'tracked_flights',
+    ] as const;
+
+    const rows: Record<string, unknown>[] = [];
+    const seen = new Set<string>();
+    for (const bucket of flightBuckets) {
+      const entries = parsed[bucket];
+      if (!Array.isArray(entries)) continue;
+      for (const item of entries) {
+        if (!isRecord(item)) continue;
+        const callsign = asString(item.callsign).trim().toUpperCase();
+        const itemIcao24 = asString(item.icao24).trim().toLowerCase();
+        if (!itemIcao24) continue;
+        const uniqueKey = `${bucket}:${itemIcao24}`;
+        if (seen.has(uniqueKey)) continue;
+
+        const searchable = [
+          item.callsign,
+          item.icao24,
+          item.registration,
+          item.type,
+          item.model,
+          item.origin_name,
+          item.dest_name,
+        ]
+          .map((value) => String(value || '').toLowerCase())
+          .join(' ');
+        const destName = asString(item.dest_name).trim().toLowerCase();
+        const originName = asString(item.origin_name).trim().toLowerCase();
+
+        if (destKeywords.size > 0) {
+          // Match against dest_name, origin_name, callsign and the full
+          // searchable blob so flights with partial route data are not
+          // silently dropped.
+          const hit = Array.from(destKeywords).some(
+            (kw) => destName.includes(kw) || originName.includes(kw) || searchable.includes(kw),
+          );
+          if (!hit) continue;
+        }
+        if (matchTerms.size > 0 && !Array.from(matchTerms).some((term) => searchable.includes(term))) {
+          continue;
+        }
+        if (callsignPrefix && !callsign.startsWith(callsignPrefix)) continue;
+        if (icao24 && itemIcao24 !== icao24) continue;
+
+        seen.add(uniqueKey);
+        const reasons: string[] = [];
+        if (destKeywords.size > 0) {
+          if (Array.from(destKeywords).some((kw) => destName.includes(kw))) reasons.push('dest_keyword');
+          else if (Array.from(destKeywords).some((kw) => originName.includes(kw))) reasons.push('origin_keyword');
+          else reasons.push('searchable_match');
+        }
+        if (matchTerms.size > 0) reasons.push('match');
+        if (callsignPrefix) reasons.push('callsign_prefix');
+        if (icao24) reasons.push('icao24');
+        rows.push({
+          ...item,
+          source_bucket: bucket,
+          match_reasons: reasons,
+        });
+      }
+    }
+
+    return extractFlightMatches(rows.slice(0, limit));
+  } catch {
+    return [];
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 function extractAiUpstreamError(payload: unknown, fallback: string): string {
@@ -636,11 +809,16 @@ async function handleAiQa(req: NextRequest): Promise<NextResponse> {
   const agent = isRecord(body.agent) ? body.agent : {};
   const agentId = asString(body.agent_id || agent.id).trim() || 'default';
   const sessionId = asString(body.session_id).trim() || `ai-qa-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  const executionPlans = buildExecutionPlans(message, repoRoot, backendBaseUrl);
+  const flightPlan = executionPlans.find((plan) => plan.skillId === 'shadowbroker-flight-query') || null;
+  const flightQuery = Boolean(flightPlan);
+  const flightProbePromise = flightQuery ? runFlightHighlightProbe(flightPlan, backendBaseUrl) : null;
 
   if (executeMode) {
-    const executeResult = await runExecuteMode(body, repoRoot, backendBaseUrl);
+    const executeResult = await runExecuteMode(body, repoRoot, backendBaseUrl, executionPlans);
     if (executeResult.attempted) {
-      return buildExecuteModeResponse(executeResult, agentId);
+      const flightMatches = flightProbePromise ? await flightProbePromise : [];
+      return buildExecuteModeResponse(executeResult, agentId, undefined, flightMatches, flightQuery);
     }
   }
 
@@ -676,21 +854,39 @@ async function handleAiQa(req: NextRequest): Promise<NextResponse> {
       const out: UnknownRecord = { ...parsed };
       if (!asString(out.agent_id).trim()) out.agent_id = agentId;
       if (!asString(out.trace_id).trim()) out.trace_id = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+      if (flightQuery) {
+        out.flight_query = true;
+        out.flight_matches = flightProbePromise ? await flightProbePromise : [];
+      }
       return NextResponse.json(out, { headers: NO_STORE_PROXY_HEADERS });
     }
+    const flightMatches = flightProbePromise ? await flightProbePromise : [];
     return NextResponse.json(
       {
         text: raw,
         agent_id: agentId,
         trace_id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+        ...(flightQuery
+          ? {
+            flight_query: true,
+            flight_matches: flightMatches,
+          }
+          : {}),
       },
       { headers: NO_STORE_PROXY_HEADERS },
     );
   } catch (error) {
-    const fallbackExecuteResult = await runExecuteMode(body, repoRoot, backendBaseUrl);
+    const fallbackExecuteResult = await runExecuteMode(body, repoRoot, backendBaseUrl, executionPlans);
     if (fallbackExecuteResult.attempted) {
       const detail = error instanceof Error ? error.message : '未知错误';
-      return buildExecuteModeResponse(fallbackExecuteResult, agentId, detail);
+      const flightMatches = flightProbePromise ? await flightProbePromise : [];
+      return buildExecuteModeResponse(
+        fallbackExecuteResult,
+        agentId,
+        detail,
+        flightMatches,
+        flightQuery,
+      );
     }
     return NextResponse.json(
       {

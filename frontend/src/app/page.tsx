@@ -22,7 +22,7 @@ import GlobalTicker from '@/components/GlobalTicker';
 import ErrorBoundary from '@/components/ErrorBoundary';
 import OnboardingModal, { useOnboarding } from '@/components/OnboardingModal';
 import ChangelogModal, { useChangelog } from '@/components/ChangelogModal';
-import type { ActiveLayers, KiwiSDR, Scanner, SelectedEntity } from '@/types/dashboard';
+import type { ActiveLayers, FlightQueryMatch, KiwiSDR, Scanner, SelectedEntity } from '@/types/dashboard';
 import type { ShodanSearchMatch } from '@/types/shodan';
 import { NOMINATIM_DEBOUNCE_MS } from '@/lib/constants';
 import { API_BASE } from '@/lib/api';
@@ -293,6 +293,7 @@ export default function Dashboard() {
   const viewBoundsRef = useRef<{ south: number; west: number; north: number; east: number } | null>(null);
   const { mouseCoords, locationLabel, handleMouseCoords } = useReverseGeocode();
   const [selectedEntity, setSelectedEntity] = useState<SelectedEntity | null>(null);
+  const [flightHighlights, setFlightHighlights] = useState<FlightQueryMatch[]>([]);
   const [trackedSdr, setTrackedSdr] = useState<KiwiSDR | null>(null);
   const [trackedScanner, setTrackedScanner] = useState<Scanner | null>(null);
   const { regionDossier, regionDossierLoading, handleMapRightClick } = useRegionDossier(
@@ -511,6 +512,14 @@ export default function Dashboard() {
     [],
   );
 
+  const handleFlightMatches = useCallback((matches: FlightQueryMatch[]) => {
+    setFlightHighlights(matches);
+    const firstMatch = matches[0];
+    if (firstMatch) {
+      setFlyToLocation({ lat: firstMatch.lat, lng: firstMatch.lng, ts: Date.now() });
+    }
+  }, []);
+
   const handleMeasureClick = useCallback(
     (pt: { lat: number; lng: number }) => {
       setMeasurePoints((prev) => (prev.length >= 3 ? prev : [...prev, pt]));
@@ -548,8 +557,8 @@ export default function Dashboard() {
   const [, setCameraCenter] = useState<{ lat: number; lng: number } | null>(null);
 
   // Onboarding & connection status
-  const { showOnboarding, setShowOnboarding } = useOnboarding();
-  const { showChangelog, setShowChangelog } = useChangelog();
+  const { showOnboarding, setShowOnboarding } = useOnboarding(false);
+  const { showChangelog, setShowChangelog } = useChangelog(false);
 
   return (
     <>
@@ -586,6 +595,7 @@ export default function Dashboard() {
             setTrackedScanner={setTrackedScanner}
             shodanResults={shodanResults}
             shodanStyle={shodanStyle}
+            flightHighlights={flightHighlights}
           />
         </ErrorBoundary>
 
@@ -738,6 +748,8 @@ export default function Dashboard() {
                       selectedEntityName: selectedEntity?.name || null,
                       mapView,
                     }}
+                    onFlightMatches={handleFlightMatches}
+                    onFlyToFlight={handleFlyTo}
                   />
                 </ErrorBoundary>
               </div>

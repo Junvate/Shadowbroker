@@ -1,7 +1,8 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Marker } from 'react-map-gl/maplibre';
 import type { Earthquake, SelectedEntity, Ship, TrackedFlight, UAV } from '@/types/dashboard';
 import type { SpreadAlertItem } from '@/utils/alertSpread';
+import { sameStringRecord } from '@/lib/stringRecord';
 import { lookupStaticUiText } from '@/lib/zhStaticDictionary';
 import { useTheme, type UiLanguage } from '@/lib/ThemeContext';
 
@@ -111,13 +112,15 @@ function useThreatTitleTranslations(
   uiLanguage: UiLanguage,
 ): Record<string, string> {
   const [translations, setTranslations] = useState<Record<string, string>>({});
-  const titles = useMemo(
-    () => Array.from(new Set(spreadAlerts.map((item) => String(item.title || '').trim()).filter(Boolean))),
-    [spreadAlerts],
+  const titles = Array.from(
+    new Set(spreadAlerts.map((item) => String(item.title || '').trim()).filter(Boolean)),
   );
 
   useEffect(() => {
-    if (titles.length === 0) return;
+    if (titles.length === 0) {
+      setTranslations((prev) => (Object.keys(prev).length === 0 ? prev : {}));
+      return;
+    }
     hydrateThreatTitleCacheFromStorage();
     let cancelled = false;
 
@@ -153,9 +156,7 @@ function useThreatTitleTranslations(
       }
     }
 
-    if (Object.keys(immediate).length > 0) {
-      setTranslations((prev) => ({ ...prev, ...immediate }));
-    }
+    setTranslations((prev) => (sameStringRecord(prev, immediate) ? prev : immediate));
     if (cacheDirty) {
       persistThreatTitleCacheToStorage();
     }
@@ -207,8 +208,9 @@ function useThreatTitleTranslations(
         });
         if (dirty) persistThreatTitleCacheToStorage();
 
-        if (!cancelled && Object.keys(mapped).length > 0) {
-          setTranslations((prev) => ({ ...prev, ...mapped }));
+        if (!cancelled) {
+          const nextTranslations = { ...immediate, ...mapped };
+          setTranslations((prev) => (sameStringRecord(prev, nextTranslations) ? prev : nextTranslations));
         }
       } catch {
         let dirty = false;
@@ -222,8 +224,9 @@ function useThreatTitleTranslations(
           }
         });
         if (dirty) persistThreatTitleCacheToStorage();
-        if (!cancelled && Object.keys(mapped).length > 0) {
-          setTranslations((prev) => ({ ...prev, ...mapped }));
+        if (!cancelled) {
+          const nextTranslations = { ...immediate, ...mapped };
+          setTranslations((prev) => (sameStringRecord(prev, nextTranslations) ? prev : nextTranslations));
         }
       }
     })();

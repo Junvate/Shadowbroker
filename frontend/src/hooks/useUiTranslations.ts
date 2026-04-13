@@ -1,12 +1,13 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { UiLanguage } from '@/lib/ThemeContext';
 import { lookupStaticUiText } from '@/lib/zhStaticDictionary';
+import { sameStringRecord } from '@/lib/stringRecord';
+import { TRANSLATION_MAX_TEXT_LENGTH } from '@/lib/translationConstants';
 
 const CACHE_KEY = 'sb_ui_text_translation_cache_v1';
 const CACHE_LIMIT = 5000;
-const MAX_TEXT_LENGTH = 320;
 
 function normalizeText(value: string): string {
   return String(value || '').trim().replace(/\s+/g, ' ');
@@ -14,7 +15,7 @@ function normalizeText(value: string): string {
 
 function shouldTranslateText(text: string, uiLanguage: UiLanguage): boolean {
   if (!text) return false;
-  if (text.length > MAX_TEXT_LENGTH) return false;
+  if (text.length > TRANSLATION_MAX_TEXT_LENGTH) return false;
   if (/^https?:\/\//i.test(text)) return false;
   return uiLanguage === 'zh' ? /[A-Za-z]/.test(text) : /[\u4e00-\u9fff]/.test(text);
 }
@@ -57,15 +58,12 @@ export function useUiTranslations(
   values: Array<string | null | undefined>,
   uiLanguage: UiLanguage,
 ): Record<string, string> {
-  const texts = useMemo(
-    () => Array.from(new Set(values.map((value) => normalizeText(value || '')).filter(Boolean))),
-    [values],
-  );
+  const texts = Array.from(new Set(values.map((value) => normalizeText(value || '')).filter(Boolean)));
   const [translations, setTranslations] = useState<Record<string, string>>({});
 
   useEffect(() => {
     if (texts.length === 0) {
-      setTranslations({});
+      setTranslations((prev) => (Object.keys(prev).length === 0 ? prev : {}));
       return;
     }
 
@@ -98,7 +96,7 @@ export function useUiTranslations(
     if (cacheDirty) {
       safeSaveCache(cache);
     }
-    setTranslations(immediate);
+    setTranslations((prev) => (sameStringRecord(prev, immediate) ? prev : immediate));
 
     if (pending.length === 0) return;
 
@@ -131,7 +129,7 @@ export function useUiTranslations(
           safeSaveCache(cache);
         }
         if (!cancelled) {
-          setTranslations(mapped);
+          setTranslations((prev) => (sameStringRecord(prev, mapped) ? prev : mapped));
         }
       } catch {
         // ignore client-side translation failures

@@ -168,12 +168,15 @@ const CONTRIBUTORS = [
   },
 ];
 
-export function useChangelog() {
+export function useChangelog(autoOpen = true) {
   const [show, setShow] = useState(false);
   useEffect(() => {
+    if (!autoOpen) {
+      return;
+    }
     const seen = localStorage.getItem(STORAGE_KEY);
     if (!seen) setShow(true);
-  }, []);
+  }, [autoOpen]);
   return { showChangelog: show, setShowChangelog: setShow };
 }
 

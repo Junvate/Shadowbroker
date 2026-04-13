@@ -1,22 +1,33 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
-
 import { POST as proxyPost } from '@/app/api/[...path]/route';
 
+function requestUrl(input: RequestInfo | URL): string {
+  if (typeof input === 'string') return input;
+  if (input instanceof URL) return input.toString();
+  if (input instanceof Request) return input.url;
+  return String(input);
+}
+
 describe('/api/ai/qa route', () => {
+  let cwdSpy: ReturnType<typeof vi.spyOn<typeof process, 'cwd'>> | null = null;
   const originalEnv = {
     AI_QA_BASE_URL: process.env.AI_QA_BASE_URL,
     AI_QA_MODEL: process.env.AI_QA_MODEL,
     AI_QA_API_KEY: process.env.AI_QA_API_KEY,
     AI_QA_TIMEOUT_MS: process.env.AI_QA_TIMEOUT_MS,
+    BACKEND_URL: process.env.BACKEND_URL,
+    AI_QA_FLIGHT_MATCH_TIMEOUT_MS: process.env.AI_QA_FLIGHT_MATCH_TIMEOUT_MS,
   };
 
   beforeEach(() => {
+    cwdSpy = vi.spyOn(process, 'cwd').mockReturnValue('/data/aYJC/Shadowbroker/frontend');
     process.env.AI_QA_BASE_URL = 'http://llm.test';
     process.env.AI_QA_MODEL = '';
     process.env.AI_QA_API_KEY = '';
     process.env.AI_QA_TIMEOUT_MS = '3000';
-    vi.restoreAllMocks();
+    process.env.BACKEND_URL = 'http://127.0.0.1:8000';
+    process.env.AI_QA_FLIGHT_MATCH_TIMEOUT_MS = '750';
   });
 
   afterEach(() => {
@@ -24,21 +35,44 @@ describe('/api/ai/qa route', () => {
     process.env.AI_QA_MODEL = originalEnv.AI_QA_MODEL;
     process.env.AI_QA_API_KEY = originalEnv.AI_QA_API_KEY;
     process.env.AI_QA_TIMEOUT_MS = originalEnv.AI_QA_TIMEOUT_MS;
-    vi.restoreAllMocks();
+    process.env.BACKEND_URL = originalEnv.BACKEND_URL;
+    process.env.AI_QA_FLIGHT_MATCH_TIMEOUT_MS = originalEnv.AI_QA_FLIGHT_MATCH_TIMEOUT_MS;
+    cwdSpy?.mockRestore();
+    cwdSpy = null;
+    vi.unstubAllGlobals();
+    vi.clearAllMocks();
   });
 
   it('forwards requests to the nanobot chat completions endpoint with session isolation', async () => {
-    const fetchMock = vi.fn().mockResolvedValue(
-      new Response(
-        JSON.stringify({
-          choices: [{ message: { content: '已收到请求' } }],
-        }),
-        {
-          status: 200,
-          headers: { 'Content-Type': 'application/json' },
-        },
-      ),
-    );
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = requestUrl(input);
+      if (url === 'http://llm.test/v1/chat/completions') {
+        return new Response(
+          JSON.stringify({
+            choices: [{ message: { content: '已收到请求' } }],
+          }),
+          {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          },
+        );
+      }
+      if (url === 'http://127.0.0.1:8000/api/live-data/fast') {
+        return new Response(
+          JSON.stringify({
+            commercial_flights: [],
+            private_flights: [],
+            private_jets: [],
+            tracked_flights: [],
+          }),
+          {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          },
+        );
+      }
+      throw new Error(`unexpected url: ${url}`);
+    });
     vi.stubGlobal('fetch', fetchMock);
 
     const req = new NextRequest('http://localhost/api/ai/qa', {
@@ -70,10 +104,11 @@ describe('/api/ai/qa route', () => {
     expect(res.headers.get('cache-control')).toContain('no-store');
     expect(body.agent_id).toBe('mesh-analyst');
     expect(typeof body.trace_id).toBe('string');
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-    expect(fetchMock.mock.calls[0]?.[0]).toBe('http://llm.test/v1/chat/completions');
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock.mock.calls.some((call) => requestUrl(call[0] as RequestInfo | URL) === 'http://llm.test/v1/chat/completions')).toBe(true);
 
-    const requestInit = fetchMock.mock.calls[0]?.[1] as RequestInit;
+    const llmCall = fetchMock.mock.calls.find((call) => requestUrl(call[0] as RequestInfo | URL) === 'http://llm.test/v1/chat/completions');
+    const requestInit = llmCall?.[1] as RequestInit;
     const headers = new Headers(requestInit.headers);
     expect(headers.get('Content-Type')).toBe('application/json');
     expect(headers.get('Authorization')).toBeNull();
@@ -201,5 +236,78 @@ describe('/api/ai/qa route', () => {
     expect(body.execute_mode).toBe(true);
     expect(body.text).toContain('上游 nanobot 当前不可用');
     expect(body.text).toContain('【航班查询】');
+  });
+
+  it('attaches structured flight matches for recognized flight queries', async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = requestUrl(input);
+      if (url === 'http://llm.test/v1/chat/completions') {
+        return new Response(
+          JSON.stringify({
+            choices: [{ message: { content: '已找到东京方向航班' } }],
+          }),
+          {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          },
+        );
+      }
+      if (url === 'http://127.0.0.1:8000/api/live-data/fast') {
+        return new Response(
+          JSON.stringify({
+            commercial_flights: [
+              {
+                callsign: 'ANA123',
+                icao24: 'abc123',
+                lat: 35.68,
+                lng: 139.76,
+                alt: 34000,
+                speed_knots: 460,
+                origin_name: 'LAX: Los Angeles',
+                dest_name: 'NRT: Tokyo Narita',
+              },
+            ],
+            private_flights: [],
+            private_jets: [],
+            tracked_flights: [],
+          }),
+          {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          },
+        );
+      }
+      throw new Error(`unexpected url: ${url}`);
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const req = new NextRequest('http://localhost/api/ai/qa', {
+      method: 'POST',
+      body: JSON.stringify({
+        message: '查询飞往东京的航班',
+        session_id: 'flight-highlight-success',
+        options: {},
+      }),
+      headers: { 'Content-Type': 'application/json' },
+    });
+
+    const res = await proxyPost(req, { params: Promise.resolve({ path: ['ai', 'qa'] }) });
+    const body = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(body.flight_query).toBe(true);
+    expect(Array.isArray(body.flight_matches)).toBe(true);
+    expect(body.flight_matches).toEqual([
+      {
+        id: 'commercial_flights:abc123',
+        callsign: 'ANA123',
+        icao24: 'abc123',
+        lat: 35.68,
+        lng: 139.76,
+        source_bucket: 'commercial_flights',
+        match_reasons: ['dest_keyword'],
+      },
+    ]);
+    expect(body.choices?.[0]?.message?.content).toBe('已找到东京方向航班');
   });
 });

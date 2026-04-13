@@ -815,6 +815,16 @@ export interface SelectedEntity {
   extra?: Record<string, any>;
 }
 
+export interface FlightQueryMatch {
+  id: string;
+  callsign: string;
+  icao24: string;
+  lat: number;
+  lng: number;
+  sourceBucket: string;
+  matchReasons: string[];
+}
+
 export interface MeasurePoint {
   lat: number;
   lng: number;
@@ -861,4 +871,5 @@ export interface MaplibreViewerProps {
   setTrackedScanner?: (scanner: Scanner | null) => void;
   shodanResults?: import('@/types/shodan').ShodanSearchMatch[];
   shodanStyle?: import('@/types/shodan').ShodanStyleConfig;
+  flightHighlights?: FlightQueryMatch[];
 }

@@ -2,11 +2,14 @@ import { NextRequest, NextResponse } from 'next/server';
 import fs from 'fs';
 import path from 'path';
 import https from 'https';
+import {
+  TRANSLATION_MAX_REQUEST_ITEMS,
+  TRANSLATION_MAX_TEXT_LENGTH,
+} from '@/lib/translationConstants';
 
 const DEEPL_URL = 'https://api-free.deepl.com/v2/translate';
 const NIUTRANS_URL = 'https://api.niutrans.com/NiuTransServer/translation';
-const MAX_BATCH_SIZE = 40;
-const MAX_TEXT_LENGTH = 240;
+const DEEPL_MAX_BATCH_SIZE = 40;
 const NIUTRANS_MIN_INTERVAL_MS = 230; // <= ~4.3 QPS, below free-tier 5 QPS limit
 const SERVER_TRANSLATION_CACHE_LIMIT = 5000;
 const LOCAL_TRANSLATE_DEFAULT_BATCH_SIZE = 8;
@@ -19,6 +22,7 @@ type TranslateRequestBody = {
 };
 
 type TranslateProvider = 'auto' | 'deepl' | 'niutrans' | 'local';
+type ResolvedTranslateProvider = Exclude<TranslateProvider, 'auto'>;
 type LocalTranslateConfig = {
   apiUrl: string;
   apiKey: string;
@@ -158,14 +162,29 @@ function parseDotEnvValue(rawLine: string): string {
   return value.trim();
 }
 
-function readBackendEnvKey(key: string): string {
+function resolveRepoRootFromCwd(): string {
   const cwd = process.cwd();
-  const candidates = [
-    path.resolve(cwd, '..', 'backend', '.env'),
-    path.resolve(cwd, 'backend', '.env'),
-  ];
+  return cwd.endsWith(path.sep + 'frontend') ? path.resolve(cwd, '..') : cwd;
+}
 
-  for (const envPath of candidates) {
+function buildEnvFileCandidates(): string[] {
+  const cwd = process.cwd();
+  const repoRoot = resolveRepoRootFromCwd();
+  return Array.from(
+    new Set([
+      path.resolve(cwd, '.env.local'),
+      path.resolve(cwd, '.env'),
+      path.resolve(repoRoot, '.env.local'),
+      path.resolve(repoRoot, '.env'),
+      path.resolve(repoRoot, 'frontend', '.env.local'),
+      path.resolve(repoRoot, 'frontend', '.env'),
+      path.resolve(repoRoot, 'backend', '.env'),
+    ]),
+  );
+}
+
+function readEnvFileKey(key: string): string {
+  for (const envPath of buildEnvFileCandidates()) {
     try {
       if (!fs.existsSync(envPath)) continue;
       const content = fs.readFileSync(envPath, 'utf8');
@@ -187,17 +206,19 @@ function readBackendEnvKey(key: string): string {
   return '';
 }
 
+function readRuntimeEnvKey(key: string): string {
+  const envValue = process.env[key];
+  if (typeof envValue === 'string' && envValue.trim()) {
+    return envValue.trim();
+  }
+  return readEnvFileKey(key);
+}
+
 function normalizeTextList(raw: unknown): string[] {
   if (!Array.isArray(raw)) return [];
-  const cleaned: string[] = [];
-  for (const item of raw) {
-    if (typeof item !== 'string') continue;
-    const text = item.trim();
-    if (!text) continue;
-    if (text.length > MAX_TEXT_LENGTH) continue;
-    cleaned.push(text);
-  }
-  return cleaned.slice(0, 400);
+  return raw
+    .slice(0, TRANSLATION_MAX_REQUEST_ITEMS)
+    .map((item) => (typeof item === 'string' ? item.trim() : ''));
 }
 
 function sanitizeTargetLang(raw: unknown): string {
@@ -321,8 +342,8 @@ async function translateBatch(
 ): Promise<string[]> {
   const results: string[] = [];
 
-  for (let i = 0; i < texts.length; i += MAX_BATCH_SIZE) {
-    const chunk = texts.slice(i, i + MAX_BATCH_SIZE);
+  for (let i = 0; i < texts.length; i += DEEPL_MAX_BATCH_SIZE) {
+    const chunk = texts.slice(i, i + DEEPL_MAX_BATCH_SIZE);
     const params = new URLSearchParams();
     params.set('auth_key', apiKey);
     params.set('target_lang', targetLang);
@@ -392,9 +413,8 @@ function parseLocalTranslationArray(raw: string, expectedLength: number): string
 }
 
 function estimateLocalMaxTokens(texts: string[]): number {
-  const base = 24;
-  const perItem = 18;
-  return Math.min(320, Math.max(96, base + texts.length * perItem));
+  const totalChars = texts.reduce((sum, text) => sum + text.length, 0);
+  return Math.min(768, Math.max(128, Math.ceil(totalChars * 1.15)));
 }
 
 function localTargetLanguageLabel(targetLang: string): string {
@@ -453,7 +473,8 @@ async function translateWithLocalModel(
               {
                 role: 'system',
                 content:
-                  `Translate English UI strings into concise ${targetLabel}. ` +
+                  `Translate each UI string into concise ${targetLabel}. ` +
+                  'The source strings may be in English, Chinese, or mixed UI text. ' +
                   'Preserve brand names like Shadowbroker exactly. ' +
                   'Preserve code, URLs, coordinates, and acronyms. ' +
                   'Return only a raw JSON array of strings with the same length and order.',
@@ -495,51 +516,56 @@ async function translateWithLocalModel(
   return out;
 }
 
+function resolveProviderOrder(provider: TranslateProvider): ResolvedTranslateProvider[] {
+  if (provider === 'local') return ['local', 'deepl', 'niutrans'];
+  if (provider === 'deepl') return ['deepl', 'niutrans', 'local'];
+  if (provider === 'niutrans') return ['niutrans', 'deepl', 'local'];
+  return ['niutrans', 'deepl', 'local'];
+}
+
+function translationCacheKey(targetLang: string, text: string): string {
+  return `${sanitizeTargetLang(targetLang)}::${text}`;
+}
+
+function shouldAttemptTranslation(text: string): boolean {
+  return text.length > 0 && text.length <= TRANSLATION_MAX_TEXT_LENGTH;
+}
+
 export async function POST(req: NextRequest) {
   try {
     const niuApiKey = (
-      process.env.NIUTRANS_API_KEY ||
-      process.env.NIUTRANS_APP_KEY ||
-      process.env.TRANSLATE_API_KEY ||
-      readBackendEnvKey('NIUTRANS_API_KEY') ||
-      readBackendEnvKey('NIUTRANS_APP_KEY') ||
-      readBackendEnvKey('TRANSLATE_API_KEY')
+      readRuntimeEnvKey('NIUTRANS_API_KEY') ||
+      readRuntimeEnvKey('NIUTRANS_APP_KEY') ||
+      readRuntimeEnvKey('TRANSLATE_API_KEY')
     ).trim();
     const deeplApiKey = (
-      process.env.DEEPL_API_KEY ||
-      readBackendEnvKey('DEEPL_API_KEY')
+      readRuntimeEnvKey('DEEPL_API_KEY')
     ).trim();
     const localTranslateApiUrl = (
-      process.env.LOCAL_TRANSLATE_API_URL ||
-      readBackendEnvKey('LOCAL_TRANSLATE_API_URL') ||
+      readRuntimeEnvKey('LOCAL_TRANSLATE_API_URL') ||
       ''
     ).trim();
     const localTranslateApiKey = (
-      process.env.LOCAL_TRANSLATE_API_KEY ||
-      readBackendEnvKey('LOCAL_TRANSLATE_API_KEY') ||
+      readRuntimeEnvKey('LOCAL_TRANSLATE_API_KEY') ||
       'EMPTY'
     ).trim();
     const localTranslateModel = (
-      process.env.LOCAL_TRANSLATE_MODEL ||
-      readBackendEnvKey('LOCAL_TRANSLATE_MODEL') ||
+      readRuntimeEnvKey('LOCAL_TRANSLATE_MODEL') ||
       ''
     ).trim();
     const translateProvider = normalizeTranslateProvider(
-      process.env.TRANSLATE_PROVIDER ||
-      readBackendEnvKey('TRANSLATE_PROVIDER') ||
+      readRuntimeEnvKey('TRANSLATE_PROVIDER') ||
       '',
     );
     const localTranslateBatchSize = clampInt(
-      process.env.LOCAL_TRANSLATE_MAX_BATCH_SIZE ||
-      readBackendEnvKey('LOCAL_TRANSLATE_MAX_BATCH_SIZE') ||
+      readRuntimeEnvKey('LOCAL_TRANSLATE_MAX_BATCH_SIZE') ||
       '',
       LOCAL_TRANSLATE_DEFAULT_BATCH_SIZE,
       1,
       LOCAL_TRANSLATE_MAX_BATCH_SIZE,
     );
     const localTranslateTimeoutMs = clampInt(
-      process.env.LOCAL_TRANSLATE_TIMEOUT_MS ||
-      readBackendEnvKey('LOCAL_TRANSLATE_TIMEOUT_MS') ||
+      readRuntimeEnvKey('LOCAL_TRANSLATE_TIMEOUT_MS') ||
       '',
       LOCAL_TRANSLATE_DEFAULT_TIMEOUT_MS,
       1000,
@@ -556,18 +582,15 @@ export async function POST(req: NextRequest) {
           }
         : null;
     const niuAllowInsecureRaw = (
-      process.env.NIUTRANS_TLS_ALLOW_INSECURE ||
-      readBackendEnvKey('NIUTRANS_TLS_ALLOW_INSECURE') ||
+      readRuntimeEnvKey('NIUTRANS_TLS_ALLOW_INSECURE') ||
       ''
     ).trim();
     const niuAutoFallbackRaw = (
-      process.env.NIUTRANS_TLS_AUTO_FALLBACK ||
-      readBackendEnvKey('NIUTRANS_TLS_AUTO_FALLBACK') ||
+      readRuntimeEnvKey('NIUTRANS_TLS_AUTO_FALLBACK') ||
       'true'
     ).trim();
     const niuCaFile = (
-      process.env.NIUTRANS_CA_CERT_FILE ||
-      readBackendEnvKey('NIUTRANS_CA_CERT_FILE') ||
+      readRuntimeEnvKey('NIUTRANS_CA_CERT_FILE') ||
       ''
     ).trim();
     const niuTlsConfig = {
@@ -581,7 +604,8 @@ export async function POST(req: NextRequest) {
         {
           ok: false,
           error: 'missing_translate_api_key',
-          detail: 'Set LOCAL_TRANSLATE_API_URL + LOCAL_TRANSLATE_MODEL, or DEEPL_API_KEY, or NIUTRANS_API_KEY in backend/.env.',
+          detail:
+            'Set LOCAL_TRANSLATE_API_URL + LOCAL_TRANSLATE_MODEL, or DEEPL_API_KEY, or NIUTRANS_API_KEY in the frontend server runtime env (for Docker: frontend.environment) or a local .env/backend/.env file.',
         },
         { status: 503 },
       );
@@ -596,47 +620,52 @@ export async function POST(req: NextRequest) {
     }
 
     const uniq = Array.from(new Set(texts));
-    const missing = uniq.filter((item) => !serverTranslationCache.has(item));
+    const translatable = uniq.filter(shouldAttemptTranslation);
+    const missing = translatable.filter(
+      (item) => !serverTranslationCache.has(translationCacheKey(targetLang, item)),
+    );
     if (missing.length > 0) {
-      let translatedMissing: string[] = missing;
-      const providerOrder: TranslateProvider[] =
-        translateProvider === 'local'
-          ? ['local', 'deepl', 'niutrans']
-          : translateProvider === 'deepl'
-            ? ['deepl', 'niutrans', 'local']
-            : translateProvider === 'niutrans'
-              ? ['niutrans', 'deepl', 'local']
-              : ['niutrans', 'deepl', 'local'];
+      let unresolved = [...missing];
+      const providerOrder = resolveProviderOrder(translateProvider);
 
       for (const provider of providerOrder) {
-        if (provider === 'local' && localTranslateConfig) {
-          translatedMissing = await translateWithLocalModel(
-            localTranslateConfig,
-            missing,
-            targetLang,
-          );
-          break;
+        if (unresolved.length === 0) break;
+
+        let translatedChunk: string[] | null = null;
+        try {
+          if (provider === 'local' && localTranslateConfig) {
+            translatedChunk = await translateWithLocalModel(
+              localTranslateConfig,
+              unresolved,
+              targetLang,
+            );
+          } else if (provider === 'deepl' && deeplApiKey) {
+            translatedChunk = await translateBatch(deeplApiKey, unresolved, targetLang);
+          } else if (provider === 'niutrans' && niuApiKey) {
+            translatedChunk = await translateWithNiuTrans(
+              niuApiKey,
+              unresolved,
+              targetLang,
+              niuTlsConfig,
+            );
+          }
+        } catch {
+          translatedChunk = null;
         }
-        if (provider === 'deepl' && deeplApiKey) {
-          translatedMissing = await translateBatch(deeplApiKey, missing, targetLang);
-          break;
+
+        if (!translatedChunk) continue;
+
+        const nextUnresolved: string[] = [];
+        for (let i = 0; i < unresolved.length; i += 1) {
+          const source = unresolved[i];
+          const candidate = translatedChunk[i] || '';
+          if (isAcceptableTranslation(source, candidate, targetLang)) {
+            serverTranslationCache.set(translationCacheKey(targetLang, source), candidate);
+            continue;
+          }
+          nextUnresolved.push(source);
         }
-        if (provider === 'niutrans' && niuApiKey) {
-          translatedMissing = await translateWithNiuTrans(
-            niuApiKey,
-            missing,
-            targetLang,
-            niuTlsConfig,
-          );
-          break;
-        }
-      }
-      for (let i = 0; i < missing.length; i += 1) {
-        const source = missing[i];
-        const candidate = translatedMissing[i] || '';
-        if (isAcceptableTranslation(source, candidate, targetLang)) {
-          serverTranslationCache.set(source, candidate);
-        }
+        unresolved = nextUnresolved;
       }
       if (serverTranslationCache.size > SERVER_TRANSLATION_CACHE_LIMIT) {
         const overflow = serverTranslationCache.size - SERVER_TRANSLATION_CACHE_LIMIT;
@@ -649,7 +678,9 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    const translatedUniq = uniq.map((item) => serverTranslationCache.get(item) || item);
+    const translatedUniq = uniq.map(
+      (item) => serverTranslationCache.get(translationCacheKey(targetLang, item)) || item,
+    );
     const map = new Map<string, string>();
     for (let i = 0; i < uniq.length; i += 1) {
       map.set(uniq[i], translatedUniq[i] || uniq[i]);

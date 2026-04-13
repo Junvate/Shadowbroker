@@ -45,6 +45,20 @@ services:
       # Points the Next.js server-side proxy at the backend container via Docker networking.
       # Change this if your backend runs on a different host or port.
       - BACKEND_URL=http://backend:8000
+      # Translation provider settings are consumed by the Next.js server route at runtime.
+      - TRANSLATE_PROVIDER=${TRANSLATE_PROVIDER:-}
+      - LOCAL_TRANSLATE_API_URL=${LOCAL_TRANSLATE_API_URL:-}
+      - LOCAL_TRANSLATE_API_KEY=${LOCAL_TRANSLATE_API_KEY:-}
+      - LOCAL_TRANSLATE_MODEL=${LOCAL_TRANSLATE_MODEL:-}
+      - LOCAL_TRANSLATE_MAX_BATCH_SIZE=${LOCAL_TRANSLATE_MAX_BATCH_SIZE:-}
+      - LOCAL_TRANSLATE_TIMEOUT_MS=${LOCAL_TRANSLATE_TIMEOUT_MS:-}
+      - DEEPL_API_KEY=${DEEPL_API_KEY:-}
+      - NIUTRANS_API_KEY=${NIUTRANS_API_KEY:-}
+      - NIUTRANS_APP_KEY=${NIUTRANS_APP_KEY:-}
+      - TRANSLATE_API_KEY=${TRANSLATE_API_KEY:-}
+      - NIUTRANS_TLS_ALLOW_INSECURE=${NIUTRANS_TLS_ALLOW_INSECURE:-}
+      - NIUTRANS_TLS_AUTO_FALLBACK=${NIUTRANS_TLS_AUTO_FALLBACK:-}
+      - NIUTRANS_CA_CERT_FILE=${NIUTRANS_CA_CERT_FILE:-}
     depends_on:
       backend:
         condition: service_healthy
