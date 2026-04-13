@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Marker } from 'react-map-gl/maplibre';
 import type { Earthquake, SelectedEntity, Ship, TrackedFlight, UAV } from '@/types/dashboard';
 import type { SpreadAlertItem } from '@/utils/alertSpread';
@@ -112,9 +112,14 @@ function useThreatTitleTranslations(
   uiLanguage: UiLanguage,
 ): Record<string, string> {
   const [translations, setTranslations] = useState<Record<string, string>>({});
-  const titles = Array.from(
-    new Set(spreadAlerts.map((item) => String(item.title || '').trim()).filter(Boolean)),
+  const titlesKey = useMemo(
+    () =>
+      JSON.stringify(
+        Array.from(new Set(spreadAlerts.map((item) => String(item.title || '').trim()).filter(Boolean))),
+      ),
+    [spreadAlerts],
   );
+  const titles = useMemo(() => JSON.parse(titlesKey) as string[], [titlesKey]);
 
   useEffect(() => {
     if (titles.length === 0) {
@@ -133,7 +138,7 @@ function useThreatTitleTranslations(
       if (cached != null) {
         if (
           shouldTranslateThreatTitle(title, uiLanguage) &&
-          (!isAcceptableThreatTitleTranslation(title, cached, uiLanguage) || isMixedZhEn(cached))
+          !isAcceptableThreatTitleTranslation(title, cached, uiLanguage)
         ) {
           threatTitleCache.delete(threatCacheKey(uiLanguage, title));
           pending.push(title);

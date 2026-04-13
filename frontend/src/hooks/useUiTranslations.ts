@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { UiLanguage } from '@/lib/ThemeContext';
 import { lookupStaticUiText } from '@/lib/zhStaticDictionary';
 import { sameStringRecord } from '@/lib/stringRecord';
@@ -58,7 +58,11 @@ export function useUiTranslations(
   values: Array<string | null | undefined>,
   uiLanguage: UiLanguage,
 ): Record<string, string> {
-  const texts = Array.from(new Set(values.map((value) => normalizeText(value || '')).filter(Boolean)));
+  const textsKey = useMemo(
+    () => JSON.stringify(Array.from(new Set(values.map((value) => normalizeText(value || '')).filter(Boolean)))),
+    [values],
+  );
+  const texts = useMemo(() => JSON.parse(textsKey) as string[], [textsKey]);
   const [translations, setTranslations] = useState<Record<string, string>>({});
 
   useEffect(() => {

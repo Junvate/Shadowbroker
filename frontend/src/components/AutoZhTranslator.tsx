@@ -3,13 +3,20 @@
 import { useEffect, useRef } from 'react';
 import { useTheme, type UiLanguage } from '@/lib/ThemeContext';
 import { lookupStaticUiText } from '@/lib/zhStaticDictionary';
-import { TRANSLATION_MAX_TEXT_LENGTH } from '@/lib/translationConstants';
+import {
+  isAcceptableAutoTranslation,
+  normalizeAutoTranslateText,
+  resolveAutoTranslationValue,
+  shouldAutoTranslateText,
+} from '@/lib/autoZhTranslation';
 
 const CACHE_KEY = 'sb_auto_ui_cache_v1';
 const MAX_SCAN_ITEMS = 1400;
 const MAX_PENDING_API_TEXTS = 24;
 const MAX_CACHE_ENTRIES = 5000;
-const MUTATION_DELAY_MS = 180;
+// React-managed text nodes are frequently re-rendered by polling updates.
+// Restrict raw text translation to explicit opt-in islands to avoid visible flicker.
+const TEXT_TRANSLATION_ROOT_SELECTOR = '[data-auto-zh-text]';
 const VISIBILITY_RECHECK_MS = 1200;
 const ERROR_COOLDOWN_MS = 6000;
 const NO_RESULT_RETRY_MS = 60000;
@@ -47,27 +54,6 @@ function shouldSkipElement(el: Element | null): boolean {
   return false;
 }
 
-function normalizeText(raw: string): string {
-  return raw.trim().replace(/\s+/g, ' ');
-}
-
-function shouldTranslateText(raw: string, uiLanguage: UiLanguage): boolean {
-  const text = raw.trim();
-  if (!text) return false;
-  if (text.length > TRANSLATION_MAX_TEXT_LENGTH) return false;
-  if (/^https?:\/\//i.test(text)) return false;
-  if (/^[\d\s\-:/.]+$/.test(text)) return false;
-  return uiLanguage === 'zh' ? /[A-Za-z]/.test(text) : /[\u4e00-\u9fff]/.test(text);
-}
-
-function isAcceptableTranslation(source: string, candidate: string, uiLanguage: UiLanguage): boolean {
-  const src = normalizeText(source);
-  const out = normalizeText(candidate);
-  if (!src || !out || src === out) return false;
-  if (uiLanguage === 'zh') return /[\u4e00-\u9fff]/.test(out);
-  return /[A-Za-z]/.test(out);
-}
-
 function safeLoadCache(): Map<string, string> {
   try {
     const raw = localStorage.getItem(CACHE_KEY);
@@ -94,12 +80,19 @@ export default function AutoZhTranslator() {
   const cacheRef = useRef<Map<string, string>>(new Map());
   const retryAfterRef = useRef<Map<string, number>>(new Map());
   const textStateRef = useRef<WeakMap<Text, NodeTranslationState>>(new WeakMap());
-  const attrStateRef = useRef<WeakMap<HTMLElement, Partial<Record<'placeholder' | 'title' | 'aria-label' | 'value', NodeTranslationState>>>>(new WeakMap());
+  const attrStateRef = useRef<
+    WeakMap<
+      HTMLElement,
+      Partial<Record<'placeholder' | 'title' | 'aria-label' | 'value', NodeTranslationState>>
+    >
+  >(new WeakMap());
   const runningRef = useRef(false);
   const apiCooldownUntilRef = useRef(0);
   const cooldownUntilRef = useRef(0);
   const observerRef = useRef<MutationObserver | null>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const microtaskQueuedRef = useRef(false);
+  const rerunRequestedRef = useRef(false);
 
   useEffect(() => {
     cacheRef.current = safeLoadCache();
@@ -114,9 +107,11 @@ export default function AutoZhTranslator() {
         textStateRef.current.set(node, created);
         return created;
       }
-      const normalizedCurrent = normalizeText(current);
-      const normalizedSource = normalizeText(existing.source);
-      const appliedValues = Object.values(existing.applied).map((value) => normalizeText(value || ''));
+      const normalizedCurrent = normalizeAutoTranslateText(current);
+      const normalizedSource = normalizeAutoTranslateText(existing.source);
+      const appliedValues = Object.values(existing.applied).map((value) =>
+        normalizeAutoTranslateText(value || ''),
+      );
       if (
         normalizedCurrent &&
         normalizedCurrent !== normalizedSource &&
@@ -144,9 +139,11 @@ export default function AutoZhTranslator() {
         existing[attr] = created;
         return created;
       }
-      const normalizedCurrent = normalizeText(current);
-      const normalizedSource = normalizeText(attrState.source);
-      const appliedValues = Object.values(attrState.applied).map((value) => normalizeText(value || ''));
+      const normalizedCurrent = normalizeAutoTranslateText(current);
+      const normalizedSource = normalizeAutoTranslateText(attrState.source);
+      const appliedValues = Object.values(attrState.applied).map((value) =>
+        normalizeAutoTranslateText(value || ''),
+      );
       if (
         normalizedCurrent &&
         normalizedCurrent !== normalizedSource &&
@@ -158,30 +155,76 @@ export default function AutoZhTranslator() {
       return attrState;
     };
 
+    const resolveTaskValue = (task: TranslateTask, cache: Map<string, string>) => {
+      return resolveAutoTranslationValue({
+        source: task.source,
+        uiLanguage,
+        translated: cache.get(cacheKeyFor(task.source)),
+        applied:
+          task.kind === 'text'
+            ? textStateRef.current.get(task.node)?.applied[uiLanguage]
+            : attrStateRef.current.get(task.node)?.[task.attr]?.applied[uiLanguage],
+      });
+    };
+
+    const applyResolvedTasks = (tasks: TranslateTask[], cache: Map<string, string>) => {
+      for (const task of tasks) {
+        const nextValue = resolveTaskValue(task, cache);
+        if (task.kind === 'text') {
+          if (task.node.isConnected) {
+            if (task.current !== nextValue) {
+              task.node.nodeValue = nextValue;
+            }
+            task.current = nextValue;
+            const state = textStateRef.current.get(task.node);
+            if (!state) continue;
+            state.applied[uiLanguage] = nextValue;
+          }
+        } else if (task.node.isConnected) {
+          if (task.current !== nextValue) {
+            task.node.setAttribute(task.attr, nextValue);
+          }
+          task.current = nextValue;
+          const attrStates = attrStateRef.current.get(task.node);
+          const state = attrStates?.[task.attr];
+          if (!state) continue;
+          state.applied[uiLanguage] = nextValue;
+        }
+      }
+    };
+
     const applyTasks = async () => {
-      if (runningRef.current) return;
+      if (runningRef.current) {
+        rerunRequestedRef.current = true;
+        return;
+      }
       if (Date.now() < cooldownUntilRef.current) return;
       runningRef.current = true;
       try {
         const tasks: TranslateTask[] = [];
         let cacheDirty = false;
 
-        const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
-        let current: Node | null = walker.nextNode();
-        while (current && tasks.length < MAX_SCAN_ITEMS) {
-          if (current.nodeType === Node.TEXT_NODE) {
-            const textNode = current as Text;
-            const parent = textNode.parentElement;
-            const currentValue = textNode.nodeValue || '';
-            if (!shouldSkipElement(parent)) {
-              const state = resolveTextState(textNode, currentValue);
-              const source = state.source.trim();
-              if (source) {
-                tasks.push({ kind: 'text', source, current: currentValue, node: textNode });
+        const textRoots = document.querySelectorAll<HTMLElement>(TEXT_TRANSLATION_ROOT_SELECTOR);
+        for (const root of textRoots) {
+          if (tasks.length >= MAX_SCAN_ITEMS) break;
+          if (shouldSkipElement(root)) continue;
+          const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+          let current: Node | null = walker.nextNode();
+          while (current && tasks.length < MAX_SCAN_ITEMS) {
+            if (current.nodeType === Node.TEXT_NODE) {
+              const textNode = current as Text;
+              const parent = textNode.parentElement;
+              const currentValue = textNode.nodeValue || '';
+              if (!shouldSkipElement(parent)) {
+                const state = resolveTextState(textNode, currentValue);
+                const source = state.source.trim();
+                if (source) {
+                  tasks.push({ kind: 'text', source, current: currentValue, node: textNode });
+                }
               }
             }
+            current = walker.nextNode();
           }
-          current = walker.nextNode();
         }
 
         const attrNodes = document.querySelectorAll<HTMLElement>(
@@ -218,8 +261,14 @@ export default function AutoZhTranslator() {
           }
         }
 
+        applyResolvedTasks(tasks, cache);
+        if (cacheDirty) {
+          safeSaveCache(cache);
+          cacheDirty = false;
+        }
+
         const pendingText = Array.from(new Set(tasks.map((t) => t.source)))
-          .filter((source) => shouldTranslateText(source, uiLanguage))
+          .filter((source) => shouldAutoTranslateText(source, uiLanguage))
           .filter((source) => {
             if (cache.has(cacheKeyFor(source))) return false;
             const retryAfter = retryAfterRef.current.get(cacheKeyFor(source)) || 0;
@@ -241,9 +290,9 @@ export default function AutoZhTranslator() {
             const isFallback = Boolean(data?.fallback);
             const translated = Array.isArray(data?.translations) ? data.translations : [];
             pendingText.forEach((src, idx) => {
-              const out = normalizeText(translated[idx] || '');
+              const out = normalizeAutoTranslateText(translated[idx] || '');
               const cacheKey = cacheKeyFor(src);
-              if (isAcceptableTranslation(src, out, uiLanguage)) {
+              if (isAcceptableAutoTranslation(src, out, uiLanguage)) {
                 cache.set(cacheKeyFor(src), out);
                 retryAfterRef.current.delete(cacheKey);
                 cacheDirty = true;
@@ -265,46 +314,42 @@ export default function AutoZhTranslator() {
           }
         }
 
+        applyResolvedTasks(tasks, cache);
         if (cacheDirty) {
           safeSaveCache(cache);
-        }
-
-        for (const task of tasks) {
-          const translated = cache.get(cacheKeyFor(task.source));
-          const nextValue =
-            shouldTranslateText(task.source, uiLanguage) && translated && translated !== task.source
-              ? translated
-              : task.source;
-          if (task.kind === 'text') {
-            if (task.node.isConnected) {
-              if (task.current !== nextValue) {
-                task.node.nodeValue = nextValue;
-              }
-              const state = textStateRef.current.get(task.node);
-              if (!state) continue;
-              state.applied[uiLanguage] = nextValue;
-            }
-          } else if (task.node.isConnected) {
-            if (task.current !== nextValue) {
-              task.node.setAttribute(task.attr, nextValue);
-            }
-            const attrStates = attrStateRef.current.get(task.node);
-            const state = attrStates?.[task.attr];
-            if (!state) continue;
-            state.applied[uiLanguage] = nextValue;
-          }
         }
       } catch (error) {
         console.warn('[AutoZhTranslator] translate pass failed', error);
         apiCooldownUntilRef.current = Date.now() + ERROR_COOLDOWN_MS;
       } finally {
         runningRef.current = false;
+        if (rerunRequestedRef.current) {
+          rerunRequestedRef.current = false;
+          queueMicrotask(() => {
+            void applyTasks();
+          });
+        }
       }
     };
 
-    const schedule = (delay = MUTATION_DELAY_MS) => {
+    const schedule = (delay = 0) => {
+      if (delay <= 0) {
+        if (timerRef.current) {
+          clearTimeout(timerRef.current);
+          timerRef.current = null;
+        }
+        if (microtaskQueuedRef.current) return;
+        microtaskQueuedRef.current = true;
+        queueMicrotask(() => {
+          microtaskQueuedRef.current = false;
+          void applyTasks();
+        });
+        return;
+      }
+
       if (timerRef.current) clearTimeout(timerRef.current);
       timerRef.current = setTimeout(() => {
+        timerRef.current = null;
         void applyTasks();
       }, delay);
     };
@@ -316,7 +361,7 @@ export default function AutoZhTranslator() {
     };
 
     schedule();
-    observerRef.current = new MutationObserver(() => schedule(MUTATION_DELAY_MS));
+    observerRef.current = new MutationObserver(() => schedule());
     observerRef.current.observe(document.body, {
       childList: true,
       subtree: true,
